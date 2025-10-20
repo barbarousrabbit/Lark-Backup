@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python test_alert_window.py:*)",
+      "Bash(python test:*)",
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "Bash(del test_alert_window_fix.py)",
+      "Bash(find:*)",
+      "Bash(pyinstaller:*)",
+      "Bash(git init:*)",
+      "Bash(dir:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
