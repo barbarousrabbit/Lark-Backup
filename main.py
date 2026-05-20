@@ -166,7 +166,9 @@ def backup_task():
     saved_path, details = _download_and_save(backup_date)
 
     if not saved_path:
-        _generate_failure_report(backup_date, details.get('error', 'unknown'))
+        # record_attempt() has not been called yet, so +1 gives the current attempt number
+        _generate_failure_report(backup_date, details.get('error', 'unknown'),
+                                 retry_manager.get_today_attempts() + 1)
         return False
 
     logging.info(f"✅ Backup saved: {saved_path}")
@@ -178,12 +180,15 @@ def backup_task():
     except Exception as e:
         logging.error(f"❌ Report failed: {e}")
 
+    # Show backup success first so the user knows the backup itself succeeded,
+    # then follow with the comparison detail as supplementary information.
+    show_notification("Backup Successful", f"Saved: {os.path.basename(saved_path)}", "success")
+
     if warnings:
         show_notification("Data Comparison Alert", f"{len(differences)} changes, {len(warnings)} warnings", "warning")
     elif differences:
         show_notification("Data Comparison Complete", f"{len(differences)} changes", "info")
 
-    show_notification("Backup Successful", f"Saved: {os.path.basename(saved_path)}", "success")
     return True
 
 
@@ -209,8 +214,15 @@ def _run_backup_loop():
         if not retry_manager.can_attempt_today():
             logging.warning(f"⚠️ Daily limit reached ({config.MAX_DAILY_ATTEMPTS} attempts)")
             show_notification("Daily Limit Reached", "All backup attempts exhausted for today", "error")
-            _generate_failure_report(backup_date, f"All {config.MAX_DAILY_ATTEMPTS} attempts failed")
+            _generate_failure_report(backup_date, f"All {config.MAX_DAILY_ATTEMPTS} attempts failed",
+                                     retry_manager.get_today_attempts())
             return False
+
+        # Pre-check network BEFORE counting an attempt against the daily limit.
+        # A network outage should not consume retry quota — only real backup failures do.
+        if not network_monitor.check_connection():
+            logging.info("⏳ Network unavailable, waiting for recovery before attempt…")
+            network_monitor.wait_for_recovery()
 
         result = backup_task()
         attempt_count = retry_manager.record_attempt(success=result)
@@ -222,17 +234,13 @@ def _run_backup_loop():
         if remaining <= 0:
             logging.error(f"❌ Daily attempts exhausted ({config.MAX_DAILY_ATTEMPTS} times)")
             show_notification("Backup Failed", f"All {config.MAX_DAILY_ATTEMPTS} attempts failed today", "error")
-            _generate_failure_report(backup_date, f"All {config.MAX_DAILY_ATTEMPTS} attempts failed")
+            _generate_failure_report(backup_date, f"All {config.MAX_DAILY_ATTEMPTS} attempts failed",
+                                     attempt_count)
             return False
 
-        logging.warning(f"❌ Failed, {remaining} attempts remaining")
-        # If network is down, block here until it recovers before the next attempt.
-        # This is the single authoritative retry/recovery path — no background threads.
-        if not network_monitor.check_connection():
-            network_monitor.wait_for_recovery()
-        else:
-            logging.info(f"⏱️ Waiting {config.ERROR_RETRY_INTERVAL}s before retry")
-            time.sleep(config.ERROR_RETRY_INTERVAL)
+        logging.warning(f"❌ Failed (attempt {attempt_count}), {remaining} remaining")
+        logging.info(f"⏱️ Waiting {config.ERROR_RETRY_INTERVAL}s before retry")
+        time.sleep(config.ERROR_RETRY_INTERVAL)
 
 
 def _run_initial_backup_task():

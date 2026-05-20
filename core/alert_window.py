@@ -57,10 +57,11 @@ class AlertWindow:
 
         self.is_showing = True
 
-        # Show window in a new thread to avoid blocking the main program
+        # Daemon thread: does not block process exit when the window is still open
         alert_thread = threading.Thread(
             target=self._create_and_show_window,
-            args=(warnings, differences)
+            args=(warnings, differences),
+            daemon=True
         )
         alert_thread.start()
 
