@@ -135,3 +135,19 @@ pyinstaller LarkBackup.spec   # use the existing spec file
 | No automated tests | Pending | Key scenarios: network interruption recovery, duplicate-row comparison, dual-instance contention |
 | `_is_scheduled_time()` time-window check | Acceptable | 5-minute window distinguishes manual vs. scheduled start; cross-midnight bug already fixed |
 | No cleanup mechanism for report directory | Pending | Daily_Reports/ and JSON reports have no automatic expiration/deletion |
+
+---
+
+## Language Policy
+
+**All project content must be in English** — this includes:
+- Source code comments and docstrings
+- Log messages and exception strings
+- UI labels and button text
+- HTML report content
+- Documentation files (README.md, UserGuide.txt, CLAUDE.md)
+- Shell/batch scripts (echo messages, REM comments)
+
+**Conversation language** follows the user's input language (Chinese input → Chinese reply).
+
+Do not write Chinese in any file committed to the repository. If you find Chinese in existing code while making other changes, translate it in the same commit.
