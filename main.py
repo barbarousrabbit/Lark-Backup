@@ -36,6 +36,9 @@ from core.report_generator import report_generator
 # 全局实例管理器
 _instance_manager = None
 
+# 备份任务互斥锁：确保初始线程与定时线程不并发执行备份
+_backup_lock = threading.Lock()
+
 # 设置日志配置
 def setup_logging():
     """设置日志配置"""
@@ -185,7 +188,21 @@ def backup_task():
 
 
 def run_backup_with_retry():
-    """执行备份任务（带每日重试机制）"""
+    """执行备份任务（带每日重试机制）。
+    非阻塞互斥：若上一次备份仍在运行，本次触发直接跳过，避免并发备份。
+    """
+    if not _backup_lock.acquire(blocking=False):
+        logging.warning("⚠️ Backup already in progress, skipping this trigger")
+        return False
+
+    try:
+        return _run_backup_loop()
+    finally:
+        _backup_lock.release()
+
+
+def _run_backup_loop():
+    """备份重试循环（内部实现，由 run_backup_with_retry 持锁调用）。"""
     backup_date = config.get_backup_date()
 
     while True:

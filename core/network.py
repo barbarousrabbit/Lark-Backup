@@ -24,8 +24,8 @@ class NetworkMonitor:
         """尝试连接配置的检测主机，任一成功即返回 True。"""
         for host, port in config.NETWORK_CHECK_HOSTS:
             try:
-                socket.create_connection((host, port), timeout=config.NETWORK_CHECK_TIMEOUT)
-                return True
+                with socket.create_connection((host, port), timeout=config.NETWORK_CHECK_TIMEOUT):
+                    return True
             except OSError:
                 continue
         return False

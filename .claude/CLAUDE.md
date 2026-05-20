@@ -28,7 +28,10 @@ main.py                    # 入口：日志初始化 → 单例检查 → 调�
 ### 1. 单例机制 — Named Mutex，不是 PID 文件
 `core/process_manager.py` 使用 `Global\LarkBackupSingleInstance` 命名互斥量。OS 在进程死亡时自动释放，不存在僵尸锁。**不要改回 PID 文件方案**。
 
-### 2. 重试控制 — 唯一入口 `run_backup_with_retry()`
+### 2. 备份并发互斥 — `_backup_lock`
+`main.py` 中有一个模块级 `threading.Lock()`，`run_backup_with_retry()` 以 `blocking=False` 方式尝试获取。若已有备份在运行（初始线程或定时线程），新触发直接返回 False 并记录日志，**不排队等待**。**不要在锁外直接调用 `backup_task()`**。
+
+### 3. 重试控制 — 唯一入口 `run_backup_with_retry()`
 - 重试调度只在 `main.py::run_backup_with_retry()` 的 while 循环中进行
 - 网络恢复等待通过 `network_monitor.wait_for_recovery()` 串行阻塞，**不起后台线程**
 - `@with_network_retry` 装饰器仅做调用前网络前置检查，网络不通返回 None，不注册任何回调

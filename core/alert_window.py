@@ -410,10 +410,10 @@ class AlertManager:
             return
             
         if warnings and len(warnings) > 0:
-            # 筛选出有数据减少的工作表
+            # 筛选出原始删除行数超过阈值的工作表（与 data_comparator 告警口径一致）
             significant_changes = {
                 sheet: info for sheet, info in comparison_result.items()
-                if info.get('difference', 0) < -50
+                if info.get('deleted_count', 0) > 50
             }
 
             if significant_changes:
