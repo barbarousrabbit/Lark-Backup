@@ -1,19 +1,28 @@
 """
 现代化警告窗口模块
 使用customtkinter创建美观的警告界面
+
+UI 依赖延迟加载：若 customtkinter / tkinter 不可用（无 GUI 环境、未安装等），
+模块仍可正常导入，AlertManager 降级为仅记录日志。
 """
 
 import os
 import sys
 import threading
-import customtkinter as ctk
-from tkinter import PhotoImage
 import logging
 from typing import List, Dict, Optional
 
-# 设置主题
-ctk.set_appearance_mode("dark")
-ctk.set_default_color_theme("blue")
+# 延迟导入 UI 依赖，失败时降级为日志模式
+try:
+    import customtkinter as ctk
+    from tkinter import PhotoImage
+    ctk.set_appearance_mode("dark")
+    ctk.set_default_color_theme("blue")
+    _UI_AVAILABLE = True
+except Exception as _ui_err:
+    logging.warning(f"⚠️ GUI unavailable ({_ui_err}); alert window disabled, will log only")
+    _UI_AVAILABLE = False
+    ctk = None
 
 class AlertWindow:
     """现代化的警告窗口"""
@@ -406,11 +415,17 @@ class AlertManager:
                 sheet: info for sheet, info in comparison_result.items()
                 if info.get('difference', 0) < -50
             }
-            
+
             if significant_changes:
-                logging.warning(f"🚨 Showing alert for data loss on {date_str}")
+                logging.warning(f"🚨 Data loss alert for {date_str}: {warnings}")
                 self.last_alert_date = date_str
-                
+
+                if not _UI_AVAILABLE:
+                    # 无 GUI 环境，降级为日志输出
+                    for w in warnings:
+                        logging.warning(f"🚨 {w}")
+                    return
+
                 if not self.alert_window:
                     self.alert_window = AlertWindow()
                 

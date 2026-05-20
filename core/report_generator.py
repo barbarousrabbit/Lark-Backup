@@ -10,20 +10,22 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 import html
 
+from config import config
+
 class ReportGenerator:
     """报告生成器"""
-    
+
     def __init__(self, backup_dir: str):
         """
         初始化报告生成器
-        
+
         Args:
             backup_dir: 备份文件目录
         """
         self.backup_dir = backup_dir
         self.report_dir = os.path.join(backup_dir, "Daily_Reports")
         self._ensure_report_dir()
-        
+
     def _ensure_report_dir(self):
         """确保报告目录存在"""
         try:
@@ -32,7 +34,7 @@ class ReportGenerator:
                 logging.info(f"✅ Created report directory: {self.report_dir}")
         except Exception as e:
             logging.error(f"❌ Failed to create report directory: {e}")
-            
+
     def generate_daily_report(
         self,
         date_str: str,
@@ -43,21 +45,21 @@ class ReportGenerator:
     ) -> str:
         """
         生成每日报告
-        
+
         Args:
             date_str: 日期字符串
             backup_success: 备份是否成功
             backup_details: 备份详情
             comparison_result: 对比结果
             warnings: 警告信息
-            
+
         Returns:
             报告文件路径
         """
         try:
             report_filename = f"Report_{date_str}.html"
             report_path = os.path.join(self.report_dir, report_filename)
-            
+
             # 生成HTML报告
             html_content = self._generate_html_report(
                 date_str,
@@ -66,17 +68,17 @@ class ReportGenerator:
                 comparison_result,
                 warnings
             )
-            
+
             # 保存报告
             with open(report_path, 'w', encoding='utf-8') as f:
                 f.write(html_content)
-                
+
             logging.info(f"📝 Report saved: {report_path}")
-            
+
             # 同时生成JSON格式的报告用于程序化访问
             json_filename = f"Report_{date_str}.json"
             json_path = os.path.join(self.report_dir, json_filename)
-            
+
             json_data = {
                 "date": date_str,
                 "timestamp": datetime.now().isoformat(),
@@ -87,16 +89,16 @@ class ReportGenerator:
                 "comparison": comparison_result,
                 "warnings": warnings
             }
-            
+
             with open(json_path, 'w', encoding='utf-8') as f:
                 json.dump(json_data, f, ensure_ascii=False, indent=2)
-                
+
             return report_path
-            
+
         except Exception as e:
             logging.error(f"❌ Failed to generate report: {e}")
             return None
-            
+
     def _generate_html_report(
         self,
         date_str: str,
@@ -106,17 +108,17 @@ class ReportGenerator:
         warnings: Optional[List[str]]
     ) -> str:
         """生成HTML格式的报告"""
-        
+
         # 备份状态
         backup_status = "✅ 成功" if backup_success else "❌ 失败"
         backup_status_color = "#4CAF50" if backup_success else "#f44336"
-        
+
         # 生成对比结果HTML
         comparison_html = self._generate_comparison_html(comparison_result, warnings)
-        
+
         # 备份详情
         backup_details_html = self._generate_backup_details_html(backup_details)
-        
+
         html_template = f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -287,21 +289,21 @@ class ReportGenerator:
             <div class="date">{date_str}</div>
             <div class="status-badge">备份状态: {backup_status}</div>
         </div>
-        
+
         <div class="content">
             <!-- 备份详情 -->
             <div class="section">
                 <h2 class="section-title">📁 备份详情</h2>
                 {backup_details_html}
             </div>
-            
+
             <!-- 数据对比结果 -->
             <div class="section">
                 <h2 class="section-title">🔍 数据对比分析</h2>
                 {comparison_html}
             </div>
         </div>
-        
+
         <div class="footer">
             <div>生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</div>
             <div class="timestamp">Lark Backup System © 2025</div>
@@ -309,71 +311,71 @@ class ReportGenerator:
     </div>
 </body>
 </html>"""
-        
+
         return html_template
-        
+
     def _generate_backup_details_html(self, backup_details: Dict[str, Any]) -> str:
         """生成备份详情HTML"""
         if not backup_details:
             return '<div class="info-box">无备份详情信息</div>'
-            
-        html = '<div class="info-box">'
-        
+
+        content = '<div class="info-box">'
+
         # 添加备份文件路径
         if 'file_path' in backup_details:
-            html += f'''
+            content += f'''
                 <div class="info-row">
                     <span class="info-label">备份文件:</span>
                     <span class="info-value">{os.path.basename(backup_details['file_path'])}</span>
                 </div>'''
-                
+
         # 添加备份时间
         if 'backup_time' in backup_details:
-            html += f'''
+            content += f'''
                 <div class="info-row">
                     <span class="info-label">备份时间:</span>
                     <span class="info-value">{backup_details['backup_time']}</span>
                 </div>'''
-                
+
         # 添加文件大小
         if 'file_size' in backup_details:
             size_mb = backup_details['file_size'] / (1024 * 1024)
-            html += f'''
+            content += f'''
                 <div class="info-row">
                     <span class="info-label">文件大小:</span>
                     <span class="info-value">{size_mb:.2f} MB</span>
                 </div>'''
-                
+
         # 添加尝试次数
         if 'attempts' in backup_details:
-            html += f'''
+            content += f'''
                 <div class="info-row">
                     <span class="info-label">尝试次数:</span>
                     <span class="info-value">{backup_details['attempts']} 次</span>
                 </div>'''
-                
-        html += '</div>'
-        
+
+        content += '</div>'
+
         # 如果有错误信息
         if 'error' in backup_details:
-            html += f'<div class="error-box">错误: {html.escape(backup_details["error"])}</div>'
-            
-        return html
-        
+            content += f'<div class="error-box">错误: {html.escape(backup_details["error"])}</div>'
+
+        return content
+
     def _generate_comparison_html(self, comparison_result: Optional[Dict], warnings: Optional[List[str]]) -> str:
         """生成对比结果HTML"""
-        html = ""
-        
+        content = ""
+
         # 显示警告信息
         if warnings and len(warnings) > 0:
-            html += '<div class="warning-box"><ul>'
+            content += '<div class="warning-box"><ul>'
             for warning in warnings:
-                html += f'<li>{html.escape(warning)}</li>'
-            html += '</ul></div>'
-        
+                content += f'<li>{html.escape(warning)}</li>'
+            content += '</ul></div>'
+
         # 显示对比结果表格
         if comparison_result:
-            html += '''
+            content += '''
             <table class="data-table">
                 <thead>
                     <tr>
@@ -385,12 +387,12 @@ class ReportGenerator:
                     </tr>
                 </thead>
                 <tbody>'''
-                
+
             for sheet_name, diff_info in comparison_result.items():
                 before = diff_info.get('before', 0)
                 after = diff_info.get('after', 0)
                 difference = diff_info.get('difference', 0)
-                
+
                 if difference < 0:
                     change_class = "decrease"
                     change_symbol = "↓"
@@ -403,8 +405,8 @@ class ReportGenerator:
                     change_class = "unchanged"
                     change_symbol = "→"
                     status = "无变化"
-                    
-                html += f'''
+
+                content += f'''
                     <tr>
                         <td>{html.escape(sheet_name)}</td>
                         <td>{before}</td>
@@ -412,31 +414,31 @@ class ReportGenerator:
                         <td class="{change_class}">{change_symbol} {abs(difference)}</td>
                         <td>{status}</td>
                     </tr>'''
-                    
-            html += '</tbody></table>'
+
+            content += '</tbody></table>'
         else:
-            html += '<div class="success-box">✅ 数据对比正常，未发现异常变化</div>'
-            
-        return html
-        
+            content += '<div class="success-box">✅ 数据对比正常，未发现异常变化</div>'
+
+        return content
+
     def get_recent_reports(self, days: int = 7) -> List[Dict]:
         """
         获取最近几天的报告
-        
+
         Args:
             days: 天数
-            
+
         Returns:
             报告列表
         """
         reports = []
         today = datetime.now()
-        
+
         for i in range(days):
             date = today - timedelta(days=i)
             date_str = date.strftime("%Y-%m-%d")
             json_path = os.path.join(self.report_dir, f"Report_{date_str}.json")
-            
+
             if os.path.exists(json_path):
                 try:
                     with open(json_path, 'r', encoding='utf-8') as f:
@@ -444,22 +446,22 @@ class ReportGenerator:
                         reports.append(report_data)
                 except Exception as e:
                     logging.error(f"❌ Failed to load report {json_path}: {e}")
-                    
+
         return reports
-        
+
     def generate_weekly_summary(self) -> str:
         """生成周报摘要"""
         reports = self.get_recent_reports(7)
-        
+
         if not reports:
             return None
-            
+
         # 统计信息
         total_backups = len(reports)
         successful_backups = sum(1 for r in reports if r['backup']['success'])
         failed_backups = total_backups - successful_backups
         total_warnings = sum(len(r.get('warnings', [])) for r in reports)
-        
+
         summary = {
             "period": f"{(datetime.now() - timedelta(days=6)).strftime('%Y-%m-%d')} 至 {datetime.now().strftime('%Y-%m-%d')}",
             "total_backups": total_backups,
@@ -468,15 +470,17 @@ class ReportGenerator:
             "total_warnings": total_warnings,
             "success_rate": f"{(successful_backups/total_backups*100):.1f}%" if total_backups > 0 else "0%"
         }
-        
+
         summary_path = os.path.join(self.report_dir, f"Weekly_Summary_{datetime.now().strftime('%Y-%m-%d')}.json")
-        
+
         with open(summary_path, 'w', encoding='utf-8') as f:
             json.dump(summary, f, ensure_ascii=False, indent=2)
-            
+
         return summary_path
 
-# 创建全局实例
+# 全局单例
+report_generator = ReportGenerator(config.DOWNLOAD_DIR)
+
 def init_report_generator(backup_dir: str) -> ReportGenerator:
-    """初始化并获取报告生成器"""
-    return ReportGenerator(backup_dir)
+    """初始化并获取报告生成器（返回全局单例）"""
+    return report_generator

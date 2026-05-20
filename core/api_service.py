@@ -46,7 +46,7 @@ class APIService:
         }
         
         try:
-            response = requests.post(config.AUTH_URL, headers=headers, json=data)
+            response = requests.post(config.AUTH_URL, headers=headers, json=data, timeout=30)
             
             if response.status_code == 200:
                 response_data = response.json()
@@ -85,8 +85,8 @@ class APIService:
         headers = self.get_authorization_header()
         
         try:
-            response = requests.get(url, headers=headers)
-            
+            response = requests.get(url, headers=headers, timeout=30)
+
             if response.status_code == 200:
                 logging.info("✅ Wiki data acquired")
                 return response.json()
@@ -120,7 +120,7 @@ class APIService:
 
         try:
             logging.info("🔄 Creating export task...")
-            response = requests.post(config.EXPORT_TASK_URL, headers=headers, json=data)
+            response = requests.post(config.EXPORT_TASK_URL, headers=headers, json=data, timeout=30)
 
             if response.status_code == 200:
                 response_data = response.json()
@@ -153,8 +153,8 @@ class APIService:
         
         try:
             for attempt in range(config.MAX_EXPORT_STATUS_CHECKS):
-                response = requests.get(url, headers=headers)
-                
+                response = requests.get(url, headers=headers, timeout=30)
+
                 if response.status_code == 200:
                     response_data = response.json()
                     # API response details removed
@@ -209,8 +209,8 @@ class APIService:
             logging.info("🔄 Downloading file...")
             
             # 使用非流式下载方法
-            response = requests.get(url, headers=headers)
-            
+            response = requests.get(url, headers=headers, timeout=30)
+
             if response.status_code == 200:
                 # 获取内容
                 content = response.content

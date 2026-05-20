@@ -44,8 +44,6 @@ LarkBackup/
 │   └── alert_window.py     # 警告窗口模块
 │
 ├── main.py                 # 程序入口
-├── compare_data.py         # 数据对比工具
-├── compare.bat             # 数据对比快捷脚本
 ├── requirements.txt        # 依赖列表
 └── README.md               # 项目说明
 ```
@@ -58,37 +56,13 @@ LarkBackup/
 2. 解压到任意目录
 3. 运行`LarkBackup.exe`启动程序，程序将立即执行一次备份任务
 4. 程序启动后会在后台持续运行，并按照配置执行定时备份任务
-5. 需要添加到Windows启动项，请运行`AddToStartup.bat`
+5. 需要添加到Windows启动项，请运行`install_autostart.bat`
 
 ### 方法2：从源码运行
 
 1. 克隆仓库或下载源码
 2. 安装依赖：`pip install -r requirements.txt`
 3. 运行程序：`python main.py`
-
-### 使用数据对比工具
-
-手动对比不同日期的备份数据：
-
-```bash
-# 对比指定两个日期
-python compare_data.py 2024-08-21 2024-08-22
-
-# 对比昨天和前天
-python compare_data.py --yesterday
-
-# 对比最近7天
-python compare_data.py --recent 7
-
-# 对比并显示警告窗口（如果有数据丢失）
-python compare_data.py 2024-08-21 2024-08-22 --alert
-
-# 或使用批处理文件
-compare.bat
-
-# 测试报告功能
-python test_report.py
-```
 
 ## 配置说明
 

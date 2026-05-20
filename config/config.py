@@ -14,6 +14,7 @@ TOKEN = "VewzwjbYbirFTWkrSjyuUvfZs8w"  # WIKI的Token
 
 # 文件配置
 DOWNLOAD_DIR = "D:\\Case Management Platform Backup"  # 文件保存地址
+BACKUP_FILENAME_TEMPLATE = "Case Management Platform {date}.xlsx"
 
 # 获取程序实际运行目录（支持exe环境）
 def get_program_dir():
@@ -27,10 +28,6 @@ def get_program_dir():
 
 # 将日志文件保存在程序目录下的logs文件夹
 LOG_FILE = os.path.join(get_program_dir(), "logs", "LarkBackupLog.log")  # 日志文件完整路径
-
-# 进程管理配置
-# 将PID文件保存在程序目录下
-PID_FILE = os.path.join(get_program_dir(), "LarkBackup.pid")  # PID文件路径
 
 # 调度配置
 SCHEDULE_TIME = "09:00"  # 设置每天定时任务的时间，格式：HH:MM

@@ -58,8 +58,9 @@ class DailyRetryManager:
             current_minutes = time_to_minutes(current_time)
             scheduled_minutes = time_to_minutes(scheduled_time)
             
-            # 如果在预定时间前后5分钟内，认为是定时执行
-            time_diff = abs(current_minutes - scheduled_minutes)
+            # 如果在预定时间前后5分钟内，认为是定时执行（循环时钟差，跨午夜安全）
+            linear_diff = abs(current_minutes - scheduled_minutes)
+            time_diff = min(linear_diff, 1440 - linear_diff)   # circular diff on a 1440-minute clock
             return time_diff <= 5
             
         except Exception as e:
