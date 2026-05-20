@@ -1,25 +1,25 @@
 """
-文件管理模块
-处理文件操作
+File Management Module
+Handles file system operations
 """
 
 import os
 import logging
 from datetime import datetime
 
-# 导入配置
+# Import config
 from config import config
 
 class FileManager:
-    """文件管理器，处理文件系统操作"""
+    """File manager that handles file system operations"""
 
     def __init__(self):
-        """初始化文件管理器"""
+        """Initialize the file manager"""
         self.download_dir = config.DOWNLOAD_DIR
         self.ensure_download_dir_exists()
 
     def ensure_download_dir_exists(self):
-        """确保下载目录存在"""
+        """Ensure the download directory exists"""
         try:
             if not os.path.exists(self.download_dir):
                 os.makedirs(self.download_dir, exist_ok=True)
@@ -31,18 +31,18 @@ class FileManager:
             raise
 
     def save_file(self, file_content, date_str):
-        """保存文件到本地（优先覆盖原文件）"""
+        """Save a file to the local filesystem (overwrite existing file when possible)"""
         filename = config.BACKUP_FILENAME_TEMPLATE.format(date=date_str)
         file_path = os.path.join(self.download_dir, filename)
 
-        # 优先尝试直接覆盖写入
+        # Attempt a direct overwrite first
         try:
             with open(file_path, 'wb') as f:
                 f.write(file_content)
 
             logging.info(f"✅ Saved: {file_path}")
             if os.path.exists(file_path):
-                # 如果是覆盖了原有文件，特别说明
+                # Note explicitly when an existing file was overwritten
                 logging.info(f"📝 File updated: {filename}")
             return file_path
 
@@ -50,7 +50,7 @@ class FileManager:
             logging.warning(f"⚠️ Cannot overwrite: {file_path}")
             logging.info(f"🔄 Trying alternatives...")
 
-            # 尝试备选方案
+            # Fall back to alternative save strategies
             return self._try_alternative_save(file_content, date_str, file_path)
 
         except Exception as e:
@@ -58,9 +58,9 @@ class FileManager:
             return self._try_alternative_save(file_content, date_str, file_path)
 
     def _try_alternative_save(self, file_content, date_str, original_path):
-        """尝试备选保存方案"""
+        """Try alternative save strategies"""
 
-        # 方案1: 尝试先删除后写入
+        # Strategy 1: delete the existing file then write a new one
         if os.path.exists(original_path):
             try:
                 os.remove(original_path)
@@ -77,7 +77,7 @@ class FileManager:
             except Exception as e:
                 logging.error(f"❌ Write failed: {e}")
 
-        # 方案2: 使用带时间戳的文件名
+        # Strategy 2: use a timestamped filename
         timestamp = datetime.now().strftime("%H%M%S")
         filename = f"Case Management Platform {date_str}_{timestamp}.xlsx"
         timestamped_path = os.path.join(self.download_dir, filename)
@@ -93,13 +93,13 @@ class FileManager:
         except Exception as e:
             logging.error(f"❌ Timestamp failed: {e}")
 
-        # 方案3: 保存到备用目录
+        # Strategy 3: save to a fallback directory
         return self._try_fallback_save(file_content, date_str)
 
     def _try_fallback_save(self, file_content, date_str):
-        """当原目录权限不足时，尝试保存到程序目录"""
+        """Save to the program directory when the target directory lacks write permission"""
         try:
-            # 在程序目录创建backup文件夹
+            # Create a backup folder inside the current working directory
             current_dir = os.getcwd()
             fallback_dir = os.path.join(current_dir, "backup")
 
@@ -123,13 +123,13 @@ class FileManager:
             return None
 
     def get_file_path(self, date_str):
-        """根据日期字符串生成文件路径"""
+        """Generate a file path from a date string"""
         filename = config.BACKUP_FILENAME_TEMPLATE.format(date=date_str)
         return os.path.join(self.download_dir, filename)
 
-# 全局单例
+# Global singleton
 file_manager = FileManager()
 
 def init_file_manager() -> 'FileManager':
-    """初始化并获取文件管理器（返回全局单例）"""
+    """Initialize and return the file manager (returns the global singleton)"""
     return file_manager

@@ -1,6 +1,6 @@
 """
-数据对比模块
-用于对比不同日期的备份数据，检测数据变化
+Data comparison module
+Used to compare backup data from different dates and detect data changes
 """
 
 import os
@@ -14,14 +14,14 @@ from typing import Dict, List, Tuple, Optional
 from config import config
 
 class DataComparator:
-    """数据对比器，用于对比不同日期的备份文件"""
+    """Data comparator for comparing backup files from different dates"""
 
     def __init__(self, backup_dir: str):
         """
-        初始化数据对比器
+        Initialize the data comparator
 
         Args:
-            backup_dir: 备份文件所在目录
+            backup_dir: Directory where backup files are stored
         """
         self.backup_dir = backup_dir
         self.comparison_cache_file = os.path.join(
@@ -31,39 +31,39 @@ class DataComparator:
 
     def get_backup_file_path(self, date_str: str) -> str:
         """
-        获取指定日期的备份文件路径
+        Get the backup file path for a given date
 
         Args:
-            date_str: 日期字符串，格式 YYYY-MM-DD
+            date_str: Date string in YYYY-MM-DD format
 
         Returns:
-            文件路径
+            File path
         """
         filename = config.BACKUP_FILENAME_TEMPLATE.format(date=date_str)
         return os.path.join(self.backup_dir, filename)
 
     def file_exists(self, date_str: str) -> bool:
         """
-        检查指定日期的备份文件是否存在
+        Check whether the backup file for a given date exists
 
         Args:
-            date_str: 日期字符串
+            date_str: Date string
 
         Returns:
-            文件是否存在
+            Whether the file exists
         """
         file_path = self.get_backup_file_path(date_str)
         return os.path.exists(file_path)
 
     def count_data_rows(self, file_path: str) -> Dict[str, int]:
         """
-        统计Excel文件中每个工作表的数据行数
+        Count the number of data rows in each worksheet of an Excel file
 
         Args:
-            file_path: Excel文件路径
+            file_path: Path to the Excel file
 
         Returns:
-            工作表名称到行数的映射
+            Mapping from worksheet name to row count
         """
         workbook = None
         try:
@@ -93,15 +93,15 @@ class DataComparator:
 
     def get_data_rows_counter(self, file_path: str, sheet_name: str) -> Counter:
         """
-        获取指定工作表中的所有数据行（作为字符串 Counter）
-        用于精确比较数据变化，正确处理重复行
+        Get all data rows in the specified worksheet (as a string Counter)
+        Used for precise comparison of data changes, correctly handles duplicate rows
 
         Args:
-            file_path: Excel文件路径
-            sheet_name: 工作表名称
+            file_path: Path to the Excel file
+            sheet_name: Worksheet name
 
         Returns:
-            数据行的字符串 Counter
+            String Counter of data rows
         """
         workbook = None
         try:
@@ -135,39 +135,39 @@ class DataComparator:
 
     def compare_two_dates(self, date1_str: str, date2_str: str) -> Tuple[Dict[str, int], List[str]]:
         """
-        对比两个日期的备份数据
-        重点检测数据丢失情况（而非净变化）
+        Compare backup data from two dates
+        Focuses on detecting data loss (rather than net change)
 
         Args:
-            date1_str: 第一个日期（较早）
-            date2_str: 第二个日期（较晚）
+            date1_str: First date (earlier)
+            date2_str: Second date (later)
 
         Returns:
-            (差异字典, 警告消息列表)
+            (differences dict, list of warning messages)
         """
         warnings = []
         differences = {}
 
-        # 检查文件是否存在
+        # Check whether files exist
         if not self.file_exists(date1_str):
             logging.warning(f"⚠️ File for {date1_str} does not exist")
-            warnings.append(f"备份文件 {date1_str} 不存在")
+            warnings.append(f"Backup file for {date1_str} does not exist")
             return {}, warnings
 
         if not self.file_exists(date2_str):
             logging.warning(f"⚠️ File for {date2_str} does not exist")
-            warnings.append(f"备份文件 {date2_str} 不存在")
+            warnings.append(f"Backup file for {date2_str} does not exist")
             return {}, warnings
 
-        # 获取两个文件的路径
+        # Get paths for both files
         file1_path = self.get_backup_file_path(date1_str)
         file2_path = self.get_backup_file_path(date2_str)
 
-        # 统计基本行数
+        # Count basic row numbers
         counts1 = self.count_data_rows(file1_path)
         counts2 = self.count_data_rows(file2_path)
 
-        # 对比每个工作表的数据内容
+        # Compare data content for each worksheet
         all_sheets = set(counts1.keys()) | set(counts2.keys())
 
         for sheet_name in all_sheets:
@@ -175,13 +175,13 @@ class DataComparator:
             count2 = counts2.get(sheet_name, 0)
 
             if count1 == 0 and count2 == 0:
-                continue  # 两个文件都没有这个表格的数据
+                continue  # Neither file has data for this sheet
 
-            # 获取实际的数据行 Counter
+            # Get actual data row Counters
             data1 = self.get_data_rows_counter(file1_path, sheet_name)
             data2 = self.get_data_rows_counter(file2_path, sheet_name)
 
-            # 计算数据变化（Counter 减法会丢弃零/负数，只保留超出部分）
+            # Calculate data changes (Counter subtraction discards zeros/negatives, keeping only surplus)
             deleted_counter = data1 - data2   # rows in data1 not fully covered by data2
             added_counter = data2 - data1     # rows in data2 not fully covered by data1
 
@@ -189,7 +189,7 @@ class DataComparator:
             added_count = sum(added_counter.values())
             net_change = count2 - count1
 
-            # 记录详细的变化信息
+            # Record detailed change information
             if deleted_count > 0 or added_count > 0:
                 differences[sheet_name] = {
                     'before': count1,
@@ -199,11 +199,11 @@ class DataComparator:
                     'added_count': added_count
                 }
 
-                logging.info(f"📊 Sheet '{sheet_name}': {count1} → {count2} (删除: {deleted_count}, 新增: {added_count})")
+                logging.info(f"📊 Sheet '{sheet_name}': {count1} → {count2} (deleted: {deleted_count}, added: {added_count})")
 
-                # 重点关注数据丢失：如果删除的数据超过50条，生成警告
+                # Focus on data loss: generate a warning if more than 50 records were deleted
                 if deleted_count > 50:
-                    warning_msg = f"⚠️ 工作表 '{sheet_name}' 数据减少了 {deleted_count} 条记录"
+                    warning_msg = f"⚠️ Sheet '{sheet_name}' lost {deleted_count} records"
                     warnings.append(warning_msg)
                     logging.warning(warning_msg)
 
@@ -211,13 +211,13 @@ class DataComparator:
 
     def compare_with_previous_date(self, current_date_str: str) -> Tuple[Dict[str, int], List[str]]:
         """
-        将当前日期的备份与前一天对比
+        Compare the current date's backup with the previous day
 
         Args:
-            current_date_str: 当前日期字符串
+            current_date_str: Current date string
 
         Returns:
-            (差异字典, 警告消息列表)
+            (differences dict, list of warning messages)
         """
         current_date = datetime.strptime(current_date_str, "%Y-%m-%d")
         previous_date = current_date - timedelta(days=1)
@@ -228,14 +228,14 @@ class DataComparator:
 
     def check_historical_data(self, reference_date_str: str, days_back: int = 7) -> Dict[str, List[int]]:
         """
-        检查历史数据趋势
+        Check historical data trends
 
         Args:
-            reference_date_str: 参考日期
-            days_back: 往前检查的天数
+            reference_date_str: Reference date
+            days_back: Number of days to look back
 
         Returns:
-            每个工作表的历史数据行数列表
+            List of historical data row counts per worksheet
         """
         reference_date = datetime.strptime(reference_date_str, "%Y-%m-%d")
         historical_data = {}
@@ -257,34 +257,34 @@ class DataComparator:
 
     def save_comparison_result(self, date_str: str, comparison_result: Dict):
         """
-        保存对比结果到缓存文件
+        Save comparison result to the cache file
 
         Args:
-            date_str: 日期字符串
-            comparison_result: 对比结果
+            date_str: Date string
+            comparison_result: Comparison result
         """
         try:
-            # 读取现有缓存
+            # Load existing cache
             if os.path.exists(self.comparison_cache_file):
                 with open(self.comparison_cache_file, 'r', encoding='utf-8') as f:
                     cache = json.load(f)
             else:
                 cache = {}
 
-            # 更新缓存
+            # Update cache
             cache[date_str] = {
                 'timestamp': datetime.now().isoformat(),
                 'result': comparison_result
             }
 
-            # 只保留最近30天的记录
+            # Keep only the last 30 days of records
             cutoff_date = datetime.now() - timedelta(days=30)
             cache = {
                 k: v for k, v in cache.items()
                 if datetime.fromisoformat(v['timestamp']) > cutoff_date
             }
 
-            # 保存缓存
+            # Save cache
             with open(self.comparison_cache_file, 'w', encoding='utf-8') as f:
                 json.dump(cache, f, ensure_ascii=False, indent=2)
 
@@ -293,13 +293,13 @@ class DataComparator:
 
     def load_comparison_result(self, date_str: str) -> Optional[Dict]:
         """
-        从缓存加载对比结果
+        Load comparison result from cache
 
         Args:
-            date_str: 日期字符串
+            date_str: Date string
 
         Returns:
-            对比结果，如果不存在返回None
+            Comparison result, or None if not found
         """
         try:
             if os.path.exists(self.comparison_cache_file):
@@ -312,9 +312,9 @@ class DataComparator:
 
         return None
 
-# 全局单例
+# Global singleton
 data_comparator = DataComparator(config.DOWNLOAD_DIR)
 
 def init_data_comparator(backup_dir: str) -> DataComparator:
-    """初始化并获取数据对比器（返回全局单例，忽略 backup_dir 参数）"""
+    """Initialize and return the data comparator (returns the global singleton, backup_dir parameter is ignored)"""
     return data_comparator

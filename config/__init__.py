@@ -1,4 +1,4 @@
 """
-配置包
-包含程序所需的所有配置参数
-""" 
+Configuration package
+Contains all configuration parameters required by the program
+"""

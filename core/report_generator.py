@@ -1,6 +1,6 @@
 """
-每日报告生成模块
-生成备份和数据对比的详细报告
+Daily report generation module.
+Generates detailed reports for backup and data comparison results.
 """
 
 import os
@@ -13,21 +13,21 @@ import html
 from config import config
 
 class ReportGenerator:
-    """报告生成器"""
+    """Report generator"""
 
     def __init__(self, backup_dir: str):
         """
-        初始化报告生成器
+        Initialize the report generator.
 
         Args:
-            backup_dir: 备份文件目录
+            backup_dir: Directory where backup files are stored
         """
         self.backup_dir = backup_dir
         self.report_dir = os.path.join(backup_dir, "Daily_Reports")
         self._ensure_report_dir()
 
     def _ensure_report_dir(self):
-        """确保报告目录存在"""
+        """Ensure the report directory exists."""
         try:
             if not os.path.exists(self.report_dir):
                 os.makedirs(self.report_dir, exist_ok=True)
@@ -44,23 +44,23 @@ class ReportGenerator:
         warnings: Optional[List[str]] = None
     ) -> str:
         """
-        生成每日报告
+        Generate a daily report.
 
         Args:
-            date_str: 日期字符串
-            backup_success: 备份是否成功
-            backup_details: 备份详情
-            comparison_result: 对比结果
-            warnings: 警告信息
+            date_str: Date string
+            backup_success: Whether the backup succeeded
+            backup_details: Backup details
+            comparison_result: Comparison result
+            warnings: Warning messages
 
         Returns:
-            报告文件路径
+            Path to the report file
         """
         try:
             report_filename = f"Report_{date_str}.html"
             report_path = os.path.join(self.report_dir, report_filename)
 
-            # 生成HTML报告
+            # Generate HTML report
             html_content = self._generate_html_report(
                 date_str,
                 backup_success,
@@ -69,13 +69,13 @@ class ReportGenerator:
                 warnings
             )
 
-            # 保存报告
+            # Save report
             with open(report_path, 'w', encoding='utf-8') as f:
                 f.write(html_content)
 
             logging.info(f"📝 Report saved: {report_path}")
 
-            # 同时生成JSON格式的报告用于程序化访问
+            # Also generate a JSON report for programmatic access
             json_filename = f"Report_{date_str}.json"
             json_path = os.path.join(self.report_dir, json_filename)
 
@@ -107,24 +107,24 @@ class ReportGenerator:
         comparison_result: Optional[Dict],
         warnings: Optional[List[str]]
     ) -> str:
-        """生成HTML格式的报告"""
+        """Generate an HTML-format report."""
 
-        # 备份状态
-        backup_status = "✅ 成功" if backup_success else "❌ 失败"
+        # Backup status
+        backup_status = "✅ Success" if backup_success else "❌ Failed"
         backup_status_color = "#4CAF50" if backup_success else "#f44336"
 
-        # 生成对比结果HTML
+        # Generate comparison result HTML
         comparison_html = self._generate_comparison_html(comparison_result, warnings)
 
-        # 备份详情
+        # Backup details
         backup_details_html = self._generate_backup_details_html(backup_details)
 
         html_template = f"""<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>备份报告 - {date_str}</title>
+    <title>Backup Report - {date_str}</title>
     <style>
         * {{
             margin: 0;
@@ -285,27 +285,27 @@ class ReportGenerator:
 <body>
     <div class="container">
         <div class="header">
-            <h1>📊 飞书备份每日报告</h1>
+            <h1>📊 Lark Backup Daily Report</h1>
             <div class="date">{date_str}</div>
-            <div class="status-badge">备份状态: {backup_status}</div>
+            <div class="status-badge">Backup Status: {backup_status}</div>
         </div>
 
         <div class="content">
-            <!-- 备份详情 -->
+            <!-- Backup Details -->
             <div class="section">
-                <h2 class="section-title">📁 备份详情</h2>
+                <h2 class="section-title">📁 Backup Details</h2>
                 {backup_details_html}
             </div>
 
-            <!-- 数据对比结果 -->
+            <!-- Data Comparison Results -->
             <div class="section">
-                <h2 class="section-title">🔍 数据对比分析</h2>
+                <h2 class="section-title">🔍 Data Comparison</h2>
                 {comparison_html}
             </div>
         </div>
 
         <div class="footer">
-            <div>生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</div>
+            <div>Generated at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</div>
             <div class="timestamp">Lark Backup System © 2025</div>
         </div>
     </div>
@@ -315,75 +315,75 @@ class ReportGenerator:
         return html_template
 
     def _generate_backup_details_html(self, backup_details: Dict[str, Any]) -> str:
-        """生成备份详情HTML"""
+        """Generate backup details HTML."""
         if not backup_details:
-            return '<div class="info-box">无备份详情信息</div>'
+            return '<div class="info-box">No backup details available</div>'
 
         content = '<div class="info-box">'
 
-        # 添加备份文件路径
+        # Add backup file path
         if 'file_path' in backup_details:
             content += f'''
                 <div class="info-row">
-                    <span class="info-label">备份文件:</span>
+                    <span class="info-label">Backup File:</span>
                     <span class="info-value">{os.path.basename(backup_details['file_path'])}</span>
                 </div>'''
 
-        # 添加备份时间
+        # Add backup time
         if 'backup_time' in backup_details:
             content += f'''
                 <div class="info-row">
-                    <span class="info-label">备份时间:</span>
+                    <span class="info-label">Backup Time:</span>
                     <span class="info-value">{backup_details['backup_time']}</span>
                 </div>'''
 
-        # 添加文件大小
+        # Add file size
         if 'file_size' in backup_details:
             size_mb = backup_details['file_size'] / (1024 * 1024)
             content += f'''
                 <div class="info-row">
-                    <span class="info-label">文件大小:</span>
+                    <span class="info-label">File Size:</span>
                     <span class="info-value">{size_mb:.2f} MB</span>
                 </div>'''
 
-        # 添加尝试次数
+        # Add attempt count
         if 'attempts' in backup_details:
             content += f'''
                 <div class="info-row">
-                    <span class="info-label">尝试次数:</span>
-                    <span class="info-value">{backup_details['attempts']} 次</span>
+                    <span class="info-label">Attempts:</span>
+                    <span class="info-value">{backup_details['attempts']}</span>
                 </div>'''
 
         content += '</div>'
 
-        # 如果有错误信息
+        # If there is an error message
         if 'error' in backup_details:
-            content += f'<div class="error-box">错误: {html.escape(backup_details["error"])}</div>'
+            content += f'<div class="error-box">Error: {html.escape(backup_details["error"])}</div>'
 
         return content
 
     def _generate_comparison_html(self, comparison_result: Optional[Dict], warnings: Optional[List[str]]) -> str:
-        """生成对比结果HTML"""
+        """Generate comparison result HTML."""
         content = ""
 
-        # 显示警告信息
+        # Display warnings
         if warnings and len(warnings) > 0:
             content += '<div class="warning-box"><ul>'
             for warning in warnings:
                 content += f'<li>{html.escape(warning)}</li>'
             content += '</ul></div>'
 
-        # 显示对比结果表格
+        # Display comparison result table
         if comparison_result:
             content += '''
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th>工作表</th>
-                        <th>昨天数据量</th>
-                        <th>今天数据量</th>
-                        <th>变化</th>
-                        <th>状态</th>
+                        <th>Sheet</th>
+                        <th>Previous</th>
+                        <th>Current</th>
+                        <th>Change</th>
+                        <th>Status</th>
                     </tr>
                 </thead>
                 <tbody>'''
@@ -396,15 +396,15 @@ class ReportGenerator:
                 if difference < 0:
                     change_class = "decrease"
                     change_symbol = "↓"
-                    status = "数据减少"
+                    status = "Decreased"
                 elif difference > 0:
                     change_class = "increase"
                     change_symbol = "↑"
-                    status = "数据增加"
+                    status = "Increased"
                 else:
                     change_class = "unchanged"
                     change_symbol = "→"
-                    status = "无变化"
+                    status = "Unchanged"
 
                 content += f'''
                     <tr>
@@ -417,19 +417,19 @@ class ReportGenerator:
 
             content += '</tbody></table>'
         else:
-            content += '<div class="success-box">✅ 数据对比正常，未发现异常变化</div>'
+            content += '<div class="success-box">✅ No significant changes detected</div>'
 
         return content
 
     def get_recent_reports(self, days: int = 7) -> List[Dict]:
         """
-        获取最近几天的报告
+        Get reports from the last N days.
 
         Args:
-            days: 天数
+            days: Number of days
 
         Returns:
-            报告列表
+            List of reports
         """
         reports = []
         today = datetime.now()
@@ -450,20 +450,20 @@ class ReportGenerator:
         return reports
 
     def generate_weekly_summary(self) -> str:
-        """生成周报摘要"""
+        """Generate a weekly summary."""
         reports = self.get_recent_reports(7)
 
         if not reports:
             return None
 
-        # 统计信息
+        # Statistics
         total_backups = len(reports)
         successful_backups = sum(1 for r in reports if r['backup']['success'])
         failed_backups = total_backups - successful_backups
         total_warnings = sum(len(r.get('warnings', [])) for r in reports)
 
         summary = {
-            "period": f"{(datetime.now() - timedelta(days=6)).strftime('%Y-%m-%d')} 至 {datetime.now().strftime('%Y-%m-%d')}",
+            "period": f"{(datetime.now() - timedelta(days=6)).strftime('%Y-%m-%d')} to {datetime.now().strftime('%Y-%m-%d')}",
             "total_backups": total_backups,
             "successful_backups": successful_backups,
             "failed_backups": failed_backups,
@@ -478,9 +478,9 @@ class ReportGenerator:
 
         return summary_path
 
-# 全局单例
+# Global singleton
 report_generator = ReportGenerator(config.DOWNLOAD_DIR)
 
 def init_report_generator(backup_dir: str) -> ReportGenerator:
-    """初始化并获取报告生成器（返回全局单例）"""
+    """Initialize and return the report generator (returns global singleton)."""
     return report_generator

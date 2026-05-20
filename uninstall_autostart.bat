@@ -2,55 +2,55 @@
 chcp 65001 > nul
 echo.
 echo ========================================
-echo   飞书备份程序 - 自启动卸载工具
+echo   Lark Backup - Autostart Uninstaller
 echo ========================================
 echo.
 
-echo [1/3] 检查当前自启动状态...
+echo [1/3] Checking current autostart status...
 reg query "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run" /v "LarkBackup" >nul 2>&1
 if %errorlevel% equ 0 (
-    echo     ℹ 发现自启动项，准备移除
+    echo     [i] Autostart entry found - preparing to remove
     echo.
-    echo [2/3] 正在从开机自启动中移除...
+    echo [2/3] Removing from autostart...
     reg delete "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run" /v "LarkBackup" /f 2>nul
-    
+
     if %errorlevel% equ 0 (
-        echo     ✓ 成功从开机自启动中移除
+        echo     [+] Successfully removed from autostart
         echo.
-        echo 验证移除结果...
+        echo Verifying removal...
         reg query "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run" /v "LarkBackup" >nul 2>&1
         if %errorlevel% equ 0 (
-            echo     ⚠ 注册表项仍然存在，可能需要管理员权限
+            echo     [!] Registry entry still exists - administrator privileges may be required
         ) else (
-            echo     ✓ 注册表项已成功移除
+            echo     [+] Registry entry removed successfully
         )
     ) else (
-        echo     ✗ 移除失败，错误代码: %errorlevel%
+        echo     [x] Removal failed, error code: %errorlevel%
     )
 ) else (
-    echo     ℹ 未在开机自启动中找到程序项（已经移除或从未添加）
+    echo     [i] No autostart entry found (already removed or never installed)
 )
 
 echo.
-echo [3/3] 正在结束运行中的程序...
+echo [3/3] Stopping any running instance of the program...
 tasklist | find /i "LarkBackup.exe" >nul 2>&1
 if %errorlevel% equ 0 (
     taskkill /f /im "LarkBackup.exe" >nul 2>&1
     if %errorlevel% equ 0 (
-        echo     ✓ 成功结束运行中的程序
+        echo     [+] Program stopped successfully
     ) else (
-        echo     ⚠ 程序结束失败，请手动关闭
+        echo     [!] Failed to stop the program - please close it manually
     )
 ) else (
-    echo     ℹ 程序当前未在运行
+    echo     [i] Program is not currently running
 )
 
 echo.
 echo ========================================
-echo 卸载完成！
+echo Uninstall complete!
 echo.
-echo 程序已从开机自启动中移除
-echo 如需重新安装自启动，请运行: install_autostart.bat
+echo Program has been removed from autostart.
+echo To re-enable autostart, run: install_autostart.bat
 echo ========================================
 echo.
 pause

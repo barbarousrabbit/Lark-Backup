@@ -1,12 +1,15 @@
 """
-网络模块
-处理网络连接检测和恢复逻辑
+Network Module
+Handles network connectivity detection and recovery logic
 
-设计原则：
-  - NetworkMonitor 只负责「检测」和「等待恢复」，不负责「重试业务逻辑」。
-  - 重试调度由 run_backup_with_retry() 统一控制，避免并行重试路径冲突。
-  - with_network_retry 装饰器仅做调用前的网络前置检查，网络不通时立即返回
-    None，由调用方决定下一步。
+Design principles:
+  - NetworkMonitor is solely responsible for "detection" and "waiting for recovery",
+    not for "retrying business logic".
+  - Retry scheduling is controlled uniformly by run_backup_with_retry() to avoid
+    conflicting parallel retry paths.
+  - The with_network_retry decorator only performs a pre-call network check; it
+    returns None immediately when the network is unavailable, leaving the next
+    step to the caller.
 """
 
 import socket
@@ -18,10 +21,10 @@ from config import config
 
 
 class NetworkMonitor:
-    """网络监控器：检测连通性，阻塞等待恢复。"""
+    """Network monitor: detects connectivity and blocks until recovery."""
 
     def check_connection(self) -> bool:
-        """尝试连接配置的检测主机，任一成功即返回 True。"""
+        """Attempt to connect to configured check hosts; return True if any succeeds."""
         for host, port in config.NETWORK_CHECK_HOSTS:
             try:
                 with socket.create_connection((host, port), timeout=config.NETWORK_CHECK_TIMEOUT):
@@ -32,7 +35,8 @@ class NetworkMonitor:
 
     def wait_for_recovery(self) -> bool:
         """
-        阻塞直到网络恢复。使用指数退避减少 CPU 占用。
+        Block until network connectivity is restored. Uses exponential back-off
+        to reduce CPU usage.
         Returns True when connection is restored.
         """
         if self.check_connection():
@@ -51,15 +55,16 @@ class NetworkMonitor:
             logging.warning(f"⚠️ Network still down, next check in {interval:.0f}s…")
 
 
-# 全局单例
+# Global singleton
 network_monitor = NetworkMonitor()
 
 
 def with_network_retry(func):
     """
-    装饰器：调用前检查网络连通性。
-    网络不通时立即返回 None，不启动任何后台线程——
-    重试调度由外层 run_backup_with_retry() 统一负责。
+    Decorator: checks network connectivity before invoking the wrapped function.
+    Returns None immediately when the network is unavailable without starting any
+    background threads — retry scheduling is handled exclusively by the outer
+    run_backup_with_retry().
     """
     @wraps(func)
     def wrapper(*args, **kwargs):

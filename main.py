@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Lark (飞书) 多维表格备份程序
-自动定时下载飞书多维表格数据并保存为Excel文件
-支持断网自动恢复下载功能
-防止程序重复启动机制
+Lark (Feishu) Bitable Backup Program
+Automatically downloads Lark Bitable data on a schedule and saves it as an Excel file
+Supports automatic recovery after network disconnection
+Prevents duplicate program instances from running
 """
 
 import os
@@ -15,12 +15,12 @@ from datetime import datetime
 import threading
 import psutil
 
-# 设置Python路径，确保能导入模块
+# Set Python path to ensure modules can be imported
 current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 
-# 导入配置和自定义模块
+# Import configuration and custom modules
 from config import config
 from core.network import with_network_retry, network_monitor
 from core.api_service import api_service
@@ -33,29 +33,29 @@ from core.data_comparator import data_comparator
 from core.alert_window import alert_manager
 from core.report_generator import report_generator
 
-# 全局实例管理器
+# Global instance manager
 _instance_manager = None
 
-# 备份任务互斥锁：确保初始线程与定时线程不并发执行备份
+# Backup task mutex: ensures the initial thread and scheduler thread do not run backups concurrently
 _backup_lock = threading.Lock()
 
-# 设置日志配置
+# Configure logging
 def setup_logging():
-    """设置日志配置"""
-    # 确保日志目录存在
+    """Configure logging"""
+    # Ensure the log directory exists
     log_dir = os.path.dirname(config.LOG_FILE)
     if log_dir and not os.path.exists(log_dir):
         try:
             os.makedirs(log_dir, exist_ok=True)
         except Exception as e:
-            # 如果创建目录失败，打印到控制台并继续，日志可能无法写入文件
+            # If directory creation fails, print to console and continue; log file may not be written
             print(f"Error creating log directory {log_dir}: {e}", file=sys.stderr)
 
-    # 清除所有现有处理器
+    # Clear all existing handlers
     for handler in logging.root.handlers[:]:
         logging.root.removeHandler(handler)
 
-    # 创建文件处理器，设置为立即刷新
+    # Create file handler with immediate flush
     try:
         file_handler = logging.FileHandler(config.LOG_FILE, mode='a', encoding='utf-8')
         file_handler.setLevel(logging.INFO)
@@ -64,20 +64,20 @@ def setup_logging():
         print(f"Warning: Cannot create log file handler: {e}", file=sys.stderr)
         file_handler = None
 
-    # 创建控制台处理器
+    # Create console handler
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(logging.Formatter('%(asctime)s - PID:%(process)d - %(levelname)s - %(message)s'))
 
-    # 配置根日志器
+    # Configure root logger
     logging.root.setLevel(logging.INFO)
     if file_handler:
         logging.root.addHandler(file_handler)
     logging.root.addHandler(console_handler)
 
-    # 确保日志立即写入
+    # Ensure logs are written immediately
     logging.info("📝 Logging initialized")
-    # 手动刷新所有处理器
+    # Manually flush all handlers
     for handler in logging.root.handlers:
         handler.flush()
 
@@ -86,9 +86,9 @@ def setup_logging():
     if hasattr(sys.stderr, 'reconfigure') and sys.stderr.encoding != 'utf-8':
         sys.stderr.reconfigure(encoding='utf-8')
 
-# 设置控制台编码
+# Configure console encoding
 def setup_console_encoding():
-    """设置控制台编码"""
+    """Configure console encoding"""
     if sys.platform.startswith('win'):
         try:
             os.system('chcp 65001 > nul')
@@ -188,8 +188,8 @@ def backup_task():
 
 
 def run_backup_with_retry():
-    """执行备份任务（带每日重试机制）。
-    非阻塞互斥：若上一次备份仍在运行，本次触发直接跳过，避免并发备份。
+    """Execute the backup task with a daily retry mechanism.
+    Non-blocking mutex: if the previous backup is still running, this trigger is skipped to avoid concurrent backups.
     """
     if not _backup_lock.acquire(blocking=False):
         logging.warning("⚠️ Backup already in progress, skipping this trigger")
@@ -202,7 +202,7 @@ def run_backup_with_retry():
 
 
 def _run_backup_loop():
-    """备份重试循环（内部实现，由 run_backup_with_retry 持锁调用）。"""
+    """Backup retry loop (internal implementation, called under lock by run_backup_with_retry)."""
     backup_date = config.get_backup_date()
 
     while True:
@@ -236,22 +236,22 @@ def _run_backup_loop():
 
 
 def _run_initial_backup_task():
-    """在独立线程中运行初始备份任务（带重试）"""
+    """Run the initial backup task in a separate thread (with retry)"""
     logging.info("🚀 Initial backup started")
     run_backup_with_retry()
     logging.info("✅ Initial backup completed")
 
 def main_logic():
-    """包含核心业务逻辑"""
+    """Contains the core business logic"""
     logging.info(f"⚙️ Main logic, PID: {os.getpid()}")
 
-    # 智能重置：如果是手动启动，重置今日重试次数
+    # Smart reset: if started manually, reset today's retry count
     retry_manager.reset_if_manual_start()
 
-    # 设置并启动任务调度器
+    # Set up and start the task scheduler
     task_scheduler.schedule_daily_task(lambda: run_backup_with_retry())
 
-    # 启动初始备份任务
+    # Start the initial backup task
     logging.info("🔄 Preparing initial backup")
     initial_backup_thread = threading.Thread(
         target=_run_initial_backup_task,
@@ -260,21 +260,21 @@ def main_logic():
     )
     initial_backup_thread.start()
 
-    # 启动调度器
+    # Start the scheduler
     task_scheduler.start(run_now=False)
 
     logging.info(f"✅ Main logic completed, PID: {os.getpid()}. Program is now running in background.")
 
 def main():
-    """程序入口点"""
+    """Program entry point"""
     global _instance_manager
 
-    # 确保在任何操作前设置好日志
+    # Ensure logging is configured before any other operations
     setup_logging()
-    # 在启动初期记录一个明确的日志，包含PID
+    # Log a clear startup entry early, including the PID
     logging.info(f"🏁 Entry point, PID: {os.getpid()}, Args: {sys.argv}")
 
-    # 初始化单例管理器并启动(如有旧实例会终止它)
+    # Initialize the single-instance manager and start it (terminates any old instance)
     _instance_manager = init_single_instance_manager()
     _instance_manager.start()
 
@@ -282,10 +282,10 @@ def main():
         setup_console_encoding()
         logging.info("🚀 Program starting")
 
-        # 核心业务逻辑
+        # Core business logic
         main_logic()
 
-        # 保持程序运行的主循环
+        # Main loop to keep the program running
         try:
             _last_heartbeat = time.time()
             while True:
@@ -296,7 +296,7 @@ def main():
                     active_threads = threading.enumerate()
                     logging.info(f"ℹ️ Heartbeat, PID: {os.getpid()}, Active threads: {len(active_threads)}")
 
-                    # 记录子进程信息
+                    # Log child process information
                     try:
                         current_process = psutil.Process(os.getpid())
                         children = current_process.children(recursive=True)
@@ -309,7 +309,7 @@ def main():
             logging.info("🛑 Interrupted by user")
             show_notification("Program Stopped", "Backup service stopped")
 
-    except SystemExit as e: # 捕获由 sys.exit() 引发的退出
+    except SystemExit as e: # Catch exits raised by sys.exit()
         logging.info(f"ℹ️ Program exiting with SystemExit code: {e.code}")
         return e.code
     except Exception as e:
@@ -321,11 +321,11 @@ def main():
         return 1
     finally:
         logging.info(f"🚪 Main function ending, PID {os.getpid()} cleaning up...")
-        # 确保日志刷新到磁盘
+        # Ensure logs are flushed to disk
         for handler in logging.root.handlers:
             handler.flush()
 
-        # 停止调度器
+        # Stop the scheduler
         if 'task_scheduler' in globals() and task_scheduler.scheduler_thread is not None:
             task_scheduler.stop()
         logging.info(f"🧼 Cleanup finished, PID {os.getpid()}.")

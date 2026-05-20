@@ -1,0 +1,75 @@
+===============================================
+     Lark Bitable Backup Program
+            User Guide
+===============================================
+
+Program Features
+-----------
+- Automatically backs up Lark Bitable data on a schedule
+- Runs a backup task automatically every day at 9:00 AM
+- Supports automatic download recovery after network interruption
+- Prevents duplicate instances from running simultaneously
+- Saves backup files in Excel format (.xlsx)
+
+File Reference
+-----------
+LarkBackup.exe          - Main program (double-click to run)
+install_autostart.bat   - Script to install Windows startup entry
+uninstall_autostart.bat - Script to remove Windows startup entry
+UserGuide.txt           - This user guide
+
+Quick Start
+-----------
+1. Extract all files to any directory
+2. Double-click install_autostart.bat (recommended)
+   OR double-click LarkBackup.exe to run directly
+
+Startup Installation
+-----------
+Running install_autostart.bat will:
+- Add the program to Windows startup
+- Launch the program immediately for the first backup
+- Run the program automatically on every subsequent system boot
+
+To remove from startup:
+- Run uninstall_autostart.bat
+
+Backup File Location
+-----------
+Default save location: D:\Case Management Platform Backup\
+File naming format:    Case Management Platform YYYY-MM-DD.xlsx
+
+Program Logs
+-----------
+Log file: LarkBackupLog.log (created in the program directory)
+Check the log to view program status and error information.
+
+Program Behavior
+-----------
+- Singleton: Re-launching the program restarts the current instance
+- Network retry: Automatically detects network recovery and retries
+- Daily limit: Maximum 5 backup attempts per day to prevent excessive retries
+- Smart reset: Resets the daily attempt count when launched manually
+
+Important Notes
+-----------
+- A stable network connection is required on first run
+- Ensure sufficient disk space is available for backup files
+- To change the backup schedule time, contact the administrator
+- The program runs in the background; check Task Manager to confirm it is running
+
+Troubleshooting
+-----------
+If the program fails to run:
+1. Check that the network connection is working
+2. Confirm the firewall is not blocking the program
+3. Review the log file for specific error details
+4. Restart the program or reinstall
+
+Support
+-----------
+If you encounter issues, check the LarkBackupLog.log file
+or contact technical support.
+
+Version: v2.1 (Patched)
+Last updated: 2025-01-21

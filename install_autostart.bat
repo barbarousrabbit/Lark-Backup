@@ -2,85 +2,85 @@
 chcp 65001 > nul
 echo.
 echo ========================================
-echo   飞书备份程序 - 自启动安装工具
+echo   Lark Backup - Autostart Installer
 echo ========================================
 echo.
 
-REM 获取当前exe文件的完整路径
+REM Get the full path of the exe in the same directory as this script
 set "EXE_PATH=%~dp0LarkBackup.exe"
 
-REM 检查exe文件是否存在
+REM Check whether the exe file exists
 if not exist "%EXE_PATH%" (
-    echo [错误] 找不到 LarkBackup.exe 文件
-    echo 请确保此脚本与 LarkBackup.exe 在同一目录下
+    echo [Error] Cannot find LarkBackup.exe
+    echo Please make sure this script and LarkBackup.exe are in the same directory.
     echo.
     pause
     exit /b 1
 )
 
-echo 当前程序路径: %EXE_PATH%
+echo Current program path: %EXE_PATH%
 echo.
 
-REM 添加到开机自启动
-echo [1/3] 正在添加到开机自启动...
-echo 注册表路径: HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run
-echo 程序名称: LarkBackup
-echo 程序路径: "%EXE_PATH%"
+REM Add to autostart registry key
+echo [1/3] Adding to autostart...
+echo Registry path: HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run
+echo Program name:  LarkBackup
+echo Program path:  "%EXE_PATH%"
 echo.
 
 reg add "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run" /v "LarkBackup" /t REG_SZ /d "\"%EXE_PATH%\"" /f
 
 if %errorlevel% equ 0 (
-    echo     ✓ 成功添加到开机自启动
+    echo     [+] Successfully added to autostart
     echo.
-    echo [2/3] 验证注册表项是否正确添加...
+    echo [2/3] Verifying registry entry...
     reg query "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run" /v "LarkBackup"
     if %errorlevel% equ 0 (
-        echo     ✓ 注册表项验证成功
+        echo     [+] Registry entry verified successfully
     ) else (
-        echo     ⚠ 注册表项验证失败，但添加操作报告成功
+        echo     [!] Registry entry verification failed, but the add operation reported success
     )
 ) else (
-    echo     ✗ 添加开机自启动失败，错误代码: %errorlevel%
-    echo     可能的原因：
-    echo     - 权限不足（尝试以管理员身份运行）
-    echo     - 注册表访问被阻止
-    echo     - 系统安全软件拦截
+    echo     [x] Failed to add autostart entry, error code: %errorlevel%
+    echo     Possible causes:
+    echo     - Insufficient permissions (try running as Administrator)
+    echo     - Registry access blocked
+    echo     - Blocked by security software
     echo.
     pause
     exit /b 1
 )
 
 echo.
-echo [3/3] 启动程序进行首次运行...
+echo [3/3] Launching program for first run...
 start "" "%EXE_PATH%"
 
 if %errorlevel% equ 0 (
-    echo     ✓ 程序启动命令执行成功
+    echo     [+] Program launch command executed successfully
     echo.
-    echo 等待3秒检查程序是否正常运行...
+    echo Waiting 3 seconds to verify the program is running...
     timeout /t 3 /nobreak >nul
-    
-    REM 检查程序是否在运行
+
+    REM Check whether the program is running
     tasklist | find /i "LarkBackup.exe" >nul 2>&1
     if %errorlevel% equ 0 (
-        echo     ✓ 程序正在运行中
+        echo     [+] Program is running
     ) else (
-        echo     ⚠ 程序可能启动失败或立即退出
-        echo     建议手动运行程序检查是否有错误
+        echo     [!] Program may have failed to start or exited immediately
+        echo     Recommend running the program manually to check for errors
     )
 ) else (
-    echo     ✗ 程序启动失败，错误代码: %errorlevel%
+    echo     [x] Failed to launch program, error code: %errorlevel%
 )
 
 echo.
 echo ========================================
-echo 安装完成！
+echo Installation complete!
 echo.
-echo 程序已添加到开机自启动，将在系统启动时自动运行
-echo 程序已在后台运行，每天早上9点自动备份数据
+echo Program has been added to autostart and will run automatically on system startup.
+echo Program is now running in the background and will back up data daily at 9:00 AM.
 echo.
-echo 如需卸载自启动，请运行: uninstall_autostart.bat
+echo To remove autostart, run: uninstall_autostart.bat
 echo ========================================
 echo.
 pause
