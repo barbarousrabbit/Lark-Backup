@@ -1,24 +1,23 @@
 # Lark Backup Tool
 
-A Python-based backup tool for Lark (Feishu) Bitable sheets. Automatically backs up Bitable data to local storage on a scheduled basis. Windows only.
+A Python-based Windows tool that automatically backs up Lark (Feishu) Bitable sheets to local storage on a daily schedule.
 
 ## Features
 
-- **Scheduled backup**: Runs a backup task automatically at a configured time each day
-- **Immediate backup**: Executes one backup run immediately on program start
+- **Scheduled backup**: Automatically runs a backup at a configured daily schedule
+- **Immediate backup**: Executes one backup run on program start without waiting for the schedule
 - **Data safety**: Local storage prevents data loss
-- **Easy configuration**: Customize backup settings by editing a single config file
-- **Singleton mode**: Process management ensures only one instance runs; re-launching automatically replaces the old instance
-- **Lightweight notification system**: Integrated notification mechanism with no subprocess overhead
-- **Auto network recovery**: Automatically resumes downloads after network interruption
-- **English notifications**: System tray notifications displayed entirely in English
-- **Subprocess management**: Intelligently tracks and cleans up child processes to prevent orphan processes
-- **Enhanced logging**: Improved logging system ensures logs are written correctly and are easy to troubleshoot
-- **Data comparison**: Automatically compares backup data across different dates to detect changes
-- **Data loss warning**: Pops up an alert window when more than 50 rows are deleted
-- **Modern UI**: Uses customtkinter to create a polished alert interface
-- **Daily reports**: Automatically generates detailed HTML reports for each day's backup and comparison, saved in the Daily_Reports folder inside the backup directory
-- **Smart notifications**: Uses win10toast for reliable system notifications with distinct success/failure/warning types
+- **Easy configuration**: All settings are controlled by a single config file
+- **Singleton mode**: Only one instance runs at a time; relaunching automatically replaces the running instance
+- **Lightweight notifications**: System tray notifications with no subprocess overhead
+- **Network recovery**: Automatically resumes the backup after a network interruption
+- **Subprocess management**: Tracks and cleans up child processes to prevent orphans
+- **Enhanced logging**: Ensures logs are written correctly and are easy to troubleshoot
+- **Data comparison**: Compares backup data across dates to detect changes and deletions
+- **Data loss alerts**: Shows a warning window when more than 50 rows are deleted
+- **Modern UI**: Uses customtkinter for a polished alert interface
+- **Daily reports**: Generates detailed HTML and JSON reports saved in the `Daily_Reports` folder
+- **Smart notifications**: Uses win10toast with distinct success/warning/error notification types
 
 ## File Structure
 
@@ -74,9 +73,9 @@ DOWNLOAD_DIR = "D:\\Case Management Platform Backup"  # File save location
 # Log files are automatically saved in the logs folder under the program directory
 
 # API configuration
-APP_ID = "cli_a735216a7178d009"  # Lark bot ID
-APP_SECRET = "CVk3xzJcAbhhdtxiR5yNIhsoPT68h3nv"  # Lark bot secret key
-TOKEN = "VewzwjbYbirFTWkrSjyuUvfZs8w"  # WIKI token
+APP_ID = "your_app_id_here"        # Lark bot App ID
+APP_SECRET = "your_app_secret_here"  # Lark bot App Secret
+TOKEN = "your_wiki_token_here"     # Lark Wiki node token
 
 # Schedule configuration
 SCHEDULE_TIME = "01:00"  # Daily scheduled task time, format: HH:MM

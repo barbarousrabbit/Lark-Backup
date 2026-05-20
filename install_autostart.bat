@@ -78,7 +78,7 @@ echo ========================================
 echo Installation complete!
 echo.
 echo Program has been added to autostart and will run automatically on system startup.
-echo Program is now running in the background and will back up data daily at 9:00 AM.
+echo Program is now running in the background and will back up data at the configured schedule time.
 echo.
 echo To remove autostart, run: uninstall_autostart.bat
 echo ========================================

@@ -36,7 +36,7 @@ main.py                    # Entry point: logging init → singleton check → s
 - Network recovery waiting is serial-blocking via `network_monitor.wait_for_recovery()` — **no background threads**
 - The `@with_network_retry` decorator only performs a pre-call network check; returns None if offline — registers no callbacks
 
-### 3. Module-Level Singletons
+### 4. Module-Level Singletons
 These objects are instantiated at the bottom of their modules. **Import and use them directly — do not call `init_xxx()` to create a new instance on every call:**
 ```python
 from core.api_service    import api_service
@@ -51,20 +51,20 @@ from core.scheduler      import task_scheduler
 ```
 The `init_xxx()` factory functions still exist for backward compatibility but return the same singleton object.
 
-### 4. Filename Template — Single Source of Truth in config
+### 5. Filename Template — Single Source of Truth in config
 There is exactly one authoritative source for backup filenames:
 ```python
 config.BACKUP_FILENAME_TEMPLATE = "Case Management Platform {date}.xlsx"
 ```
 Both `file_manager.py` and `data_comparator.py` derive their paths via `.format(date=date_str)`. **Do not hardcode filenames anywhere in the code.**
 
-### 5. Data Comparison — Counter, Not set
+### 6. Data Comparison — Counter, Not set
 `data_comparator.py::get_data_rows_counter()` returns a `collections.Counter` (multiset); comparison uses Counter subtraction. **Do not revert to set** — sets silently drop additions/deletions of duplicate rows.
 
-### 6. UI Dependency Graceful Degradation
+### 7. UI Dependency Graceful Degradation
 `alert_window.py` defers the customtkinter import inside a `try/except`. When `_UI_AVAILABLE = False`, it silently falls back to log output. **Do not `import customtkinter` at the module top level.**
 
-### 7. API Credentials Stored in Plaintext (Known Risk, Accepted)
+### 8. API Credentials Stored in Plaintext (Known Risk, Accepted)
 APP_ID / APP_SECRET / TOKEN are hardcoded in plaintext in `config.py` to support zero-configuration single-exe distribution. **Do not introduce runtime environment variable reading** — it breaks the exe user experience.
 
 ---
