@@ -48,13 +48,19 @@ LarkBackup/
 
 ## Installation & Usage
 
-### Method 1: Use the Pre-built Release
+### Method 1: Use the Pre-built Release (single exe)
 
-1. Download the latest release package: `LarkBackup_yyyy-mm-dd.zip`
-2. Extract to any directory
-3. Run `LarkBackup.exe` to start the program; it will execute one backup immediately
-4. The program continues running in the background and performs scheduled backups as configured
-5. To add the program to Windows startup, run `install_autostart.bat`
+```
+LarkBackup.exe               # start the backup service immediately
+LarkBackup.exe --install     # register Windows autostart + start service
+LarkBackup.exe --uninstall   # remove autostart + stop service
+```
+
+Typical first-time setup:
+
+1. Copy `LarkBackup.exe` to any permanent folder (e.g. `C:\Tools\LarkBackup\`)
+2. Run `LarkBackup.exe --install` — registers autostart, shows a confirmation dialog, and starts the service
+3. Done. The service runs silently in the background and backs up every day at the configured time
 
 ### Method 2: Run from Source
 

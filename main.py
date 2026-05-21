@@ -11,6 +11,9 @@ import sys
 import logging
 import time
 import traceback
+import ctypes
+import winreg
+import subprocess
 from datetime import datetime
 import threading
 import psutil
@@ -33,7 +36,89 @@ from core.data_comparator import data_comparator
 from core.alert_window import alert_manager
 from core.report_generator import report_generator
 
+# ---------------------------------------------------------------------------
+# CLI helpers — install / uninstall (single-exe distribution)
+# ---------------------------------------------------------------------------
+_REG_RUN_PATH = r"Software\Microsoft\Windows\CurrentVersion\Run"
+_REG_APP_NAME = "LarkBackup"
+
+
+def _msgbox(title: str, message: str, icon: int = 0x40) -> None:
+    """Native Win32 MessageBox — visible even with console=False in the exe."""
+    ctypes.windll.user32.MessageBoxW(None, message, title, icon)
+
+
+def _cli_install() -> None:
+    """Register autostart in HKCU and launch the backup service."""
+    if not getattr(sys, "frozen", False):
+        _msgbox("Lark Backup", "--install is only available in the packaged exe.", 0x30)
+        sys.exit(1)
+
+    exe = sys.executable  # path to LarkBackup.exe
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _REG_RUN_PATH, 0,
+                            winreg.KEY_SET_VALUE) as key:
+            winreg.SetValueEx(key, _REG_APP_NAME, 0, winreg.REG_SZ, f'"{exe}"')
+    except Exception as e:
+        _msgbox("Lark Backup — Install Failed", f"Could not register autostart:\n{e}", 0x10)
+        sys.exit(1)
+
+    # Launch the backup service (same exe, no --install flag), fully detached
+    subprocess.Popen(
+        [exe],
+        creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
+        close_fds=True,
+    )
+
+    _msgbox(
+        "Lark Backup — Installed",
+        "Autostart registered.\n\n"
+        "Lark Backup will start automatically on every login.\n"
+        "The backup service is now running in the background.\n\n"
+        "To uninstall:  LarkBackup.exe --uninstall",
+        0x40,
+    )
+    sys.exit(0)
+
+
+def _cli_uninstall() -> None:
+    """Remove autostart from HKCU and stop any running instance."""
+    removed = False
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _REG_RUN_PATH, 0,
+                            winreg.KEY_SET_VALUE) as key:
+            winreg.DeleteValue(key, _REG_APP_NAME)
+        removed = True
+    except FileNotFoundError:
+        pass  # was never registered — that's fine
+    except Exception as e:
+        _msgbox("Lark Backup — Uninstall Failed", f"Could not remove autostart:\n{e}", 0x10)
+        sys.exit(1)
+
+    # Terminate other running instances of the same exe
+    own_pid = os.getpid()
+    own_exe = os.path.abspath(sys.executable).lower()
+    for proc in psutil.process_iter(["pid", "exe"]):
+        if proc.pid == own_pid:
+            continue
+        try:
+            if (proc.info.get("exe") or "").lower() == own_exe:
+                proc.terminate()
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+
+    status = "Autostart removed." if removed else "Autostart was not registered."
+    _msgbox(
+        "Lark Backup — Uninstalled",
+        f"{status}\nThe backup service has been stopped.",
+        0x40,
+    )
+    sys.exit(0)
+
+
+# ---------------------------------------------------------------------------
 # Global instance manager
+# ---------------------------------------------------------------------------
 _instance_manager = None
 
 # Backup task mutex: ensures the initial thread and scheduler thread do not run backups concurrently
@@ -359,6 +444,14 @@ def main():
     return 0
 
 if __name__ == "__main__":
+    # Handle install / uninstall before logging or singleton setup.
+    # These flags are intended for the packaged exe only.
+    _args = sys.argv[1:]
+    if "--install" in _args:
+        _cli_install()          # shows MessageBox, then sys.exit()
+    elif "--uninstall" in _args:
+        _cli_uninstall()        # shows MessageBox, then sys.exit()
+
     logging.info(f"🎬 Script started, PID: {os.getpid()}")
     exit_code = main()
     logging.info(f"👋 Terminated, exit code: {exit_code}. PID: {os.getpid()}")

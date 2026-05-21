@@ -110,8 +110,17 @@ Edit the callers of `core/notification.py::show_notification(title, message, typ
 ### Building a Release Package
 ```bash
 pip install pyinstaller
-pyinstaller LarkBackup.spec   # use the existing spec file
+pyinstaller LarkBackup.spec
+# Output: dist/LarkBackup.exe — this is the only file to distribute
 ```
+
+### Installing / Uninstalling (end-user, packaged exe)
+```
+LarkBackup.exe --install     # registers HKCU autostart + launches service
+LarkBackup.exe --uninstall   # removes autostart + stops service
+LarkBackup.exe               # runs backup service directly (no install)
+```
+CLI is handled in `main.py::_cli_install()` / `_cli_uninstall()` before logging or singleton setup.
 
 ---
 
