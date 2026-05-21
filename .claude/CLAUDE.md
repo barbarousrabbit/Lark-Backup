@@ -17,7 +17,7 @@ main.py                    # Entry point: logging init → singleton check → s
 ├── core/file_manager      # File saving, path derived from config.BACKUP_FILENAME_TEMPLATE
 ├── core/data_comparator   # openpyxl reads xlsx, Counter multiset diff comparison
 ├── core/alert_window      # data loss alerts via win10toast (per-day deduplication)
-├── core/notification      # win10toast system notifications
+├── core/notification      # Windows 11 native notifications (windows-toasts + AUMID)
 └── core/report_generator  # HTML + JSON daily reports
 ```
 

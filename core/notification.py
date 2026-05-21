@@ -1,160 +1,183 @@
 """
 Notification Module
-Handles system notifications
+Windows 11-native system notifications via windows-toasts (WinRT).
+
+A custom AUMID is registered in HKCU on first import so Windows shows
+the Lark Backup icon — not the Python/cmd icon — in every notification.
+No admin rights required (HKCU only, built-in winreg module).
 """
 
 import os
 import sys
+import shutil
 import logging
-import time
-import threading
+import winreg
+from typing import Optional
 
-# Global notification settings
-_use_notifications = True  # Set to False to disable notifications entirely
-_notifier_name = "log_only"
-_toast_notifier = None
-_notification_lock = threading.Lock()  # Lock to prevent concurrency issues
-_win10toast_failed = False  # Tracks whether win10toast has already failed
+# ---------------------------------------------------------------------------
+# Lazy-import windows-toasts; fall back to log-only on failure
+# ---------------------------------------------------------------------------
+_TOAST_AVAILABLE = False
+_toaster = None
 
-# Attempt to import win10toast
 try:
-    from win10toast import ToastNotifier
-    # Create notifier instance
-    _toast_notifier = ToastNotifier()
-    _notifier_name = "win10toast"
-    _has_notification = True
-    logging.info("✅ Win10Toast notification")
-except ImportError:
-    logging.warning("⚠️ win10toast library unavailable, notifications disabled")
-    _notifier_name = "log_only"
-    _has_notification = False
+    from windows_toasts import (
+        InteractableWindowsToaster,
+        Toast,
+        ToastButton,
+        ToastActivatedEventArgs,
+    )
+    _TOAST_AVAILABLE = True
+except Exception as _import_err:
+    logging.warning(f"⚠️ windows-toasts unavailable ({_import_err}); notifications will be log-only")
 
-# Get icon file path
-def get_icon_path():
-    """Get the correct icon file path"""
-    # Try multiple possible paths
-    icon_name = "file_download.ico"
-    assets_dir = "assets"
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+_APP_NAME = "Lark Backup"
+_AUMID    = "LarkBackup.App"
 
-    # List of common possible paths
-    possible_paths = [
-        # Current directory
-        icon_name,
-        # assets directory
-        os.path.join(assets_dir, icon_name),
-        # When packaged with PyInstaller
-        os.path.join(getattr(sys, '_MEIPASS', '.'), assets_dir, icon_name) if hasattr(sys, '_MEIPASS') else None,
-        # Parent directory
-        os.path.join("..", assets_dir, icon_name),
-        # Executable directory assets
-        os.path.join(os.path.dirname(sys.executable), assets_dir, icon_name) if getattr(sys, 'frozen', False) else None,
-    ]
+_PREFIXES = {
+    "success": "✅ ",
+    "warning": "⚠️ ",
+    "error":   "❌ ",
+    "info":    "",
+}
 
-    # Try all possible paths
-    for path in possible_paths:
-        if path and os.path.exists(path):
-            return os.path.abspath(path)
+# ---------------------------------------------------------------------------
+# Icon path — must be a persistent file path suitable for the AUMID registry
+# ---------------------------------------------------------------------------
 
-    # Return None if icon cannot be found
-    return None
+def _get_icon_path() -> Optional[str]:
+    """
+    Return a stable on-disk path to file_download.ico.
 
-def _notify_win10toast(title, message, icon_path):
-    """Send a notification using win10toast"""
-    global _win10toast_failed
+    - Development: assets/file_download.ico relative to project root.
+    - PyInstaller exe: copies the bundled icon to %APPDATA%\\LarkBackup\\icon.ico
+      once, then reuses it. The _MEIPASS temp dir changes every run, so a
+      persistent copy is required for the AUMID IconUri registry value.
+    """
+    if getattr(sys, "frozen", False):
+        appdata = os.environ.get("APPDATA", "")
+        if not appdata:
+            return None
+        dest_dir = os.path.join(appdata, "LarkBackup")
+        os.makedirs(dest_dir, exist_ok=True)
+        dest = os.path.join(dest_dir, "icon.ico")
+        if not os.path.exists(dest):
+            src = os.path.join(getattr(sys, "_MEIPASS", ""), "assets", "file_download.ico")
+            if os.path.exists(src):
+                shutil.copy2(src, dest)
+        return dest if os.path.exists(dest) else None
+    else:
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        src = os.path.join(project_root, "assets", "file_download.ico")
+        return src if os.path.exists(src) else None
 
+
+# ---------------------------------------------------------------------------
+# AUMID registration
+# ---------------------------------------------------------------------------
+
+def _register_aumid(icon_path: str) -> None:
+    """
+    Write DisplayName and IconUri under HKCU\\SOFTWARE\\Classes\\AppUserModelId.
+    Windows reads this when displaying the notification to choose the app icon.
+    Idempotent — safe to call on every startup.
+    """
+    key_path = rf"SOFTWARE\Classes\AppUserModelId\{_AUMID}"
+    with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, key_path) as key:
+        winreg.SetValueEx(key, "DisplayName", 0, winreg.REG_SZ, _APP_NAME)
+        winreg.SetValueEx(key, "IconUri",     0, winreg.REG_SZ, icon_path)
+
+
+# ---------------------------------------------------------------------------
+# Toaster initialisation — runs once at module import
+# ---------------------------------------------------------------------------
+
+def _init_toaster() -> None:
+    global _toaster
+    if not _TOAST_AVAILABLE:
+        return
+    icon_path = _get_icon_path()
+    if icon_path:
+        try:
+            _register_aumid(icon_path)
+            logging.info(f"✅ Notification AUMID registered (icon: {icon_path})")
+        except Exception as e:
+            logging.warning(f"⚠️ AUMID registration failed: {e}")
     try:
-        if _toast_notifier:
-            # Ensure parameters are not None and perform basic validation
-            safe_title = str(title) if title is not None else "Notification"
-            safe_message = str(message) if message is not None else ""
-
-            # Validate icon path
-            safe_icon_path = icon_path if icon_path and os.path.exists(str(icon_path)) else None
-
-            # Wrap the entire toast call in try-except to catch all possible errors
-            try:
-                # Keep non-threaded mode and catch all exceptions
-                _toast_notifier.show_toast(
-                    title=safe_title,
-                    msg=safe_message,
-                    icon_path=safe_icon_path,
-                    duration=3,
-                    threaded=False  # Keep non-threaded mode
-                )
-                return True
-            except Exception as toast_error:
-                # Catch all win10toast errors, including WPARAM-related errors
-                error_msg = str(toast_error)
-                if "WPARAM" in error_msg or "LRESULT" in error_msg or "TypeError" in error_msg:
-                    logging.warning(f"⚠️ Win10Toast compatibility issue: {error_msg}")
-                else:
-                    logging.warning(f"⚠️ Win10Toast error: {error_msg}")
-
-                # Mark win10toast as failed; subsequent calls will log only
-                _win10toast_failed = True
-                return False
-
+        _toaster = InteractableWindowsToaster(_APP_NAME, notifierAUMID=_AUMID)
     except Exception as e:
-        logging.warning(f"⚠️ win10toast initialization error: {str(e)}")
-        _win10toast_failed = True
-        return False
+        logging.warning(f"⚠️ Toaster init failed: {e}")
 
-    return False
 
-def show_notification(title, message, notification_type="info"):
-    """Display a system notification — uses win10toast only"""
-    global _win10toast_failed
+_init_toaster()
 
-    # If notifications are disabled, log only
-    if not _use_notifications:
-        logging.info(f"📢 Notification [{notification_type}]: {title} - {message}")
+
+# ---------------------------------------------------------------------------
+# Backup directory helper (lazy import to avoid circular dependency)
+# ---------------------------------------------------------------------------
+
+def _backup_dir() -> str:
+    try:
+        from config import config
+        return config.DOWNLOAD_DIR
+    except Exception:
+        return ""
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+def show_notification(title: str, message: str, notification_type: str = "info") -> None:
+    """
+    Display a Windows system notification.
+
+    Falls back to log-only when windows-toasts is unavailable.
+
+    :param title:             Notification heading (bold first line).
+    :param message:           Notification body (second line).
+    :param notification_type: ``"success"`` | ``"warning"`` | ``"error"`` | ``"info"``
+    """
+    logging.info(f"📢 Notification [{notification_type}]: {title} - {message}")
+
+    if not _TOAST_AVAILABLE or _toaster is None:
         return
 
+    toast = Toast()
+    toast.text_fields = [_PREFIXES.get(notification_type, "") + title, message]
+
+    # "View Folder" button on success and error notifications
+    if notification_type in ("success", "error"):
+        bdir = _backup_dir()
+        if bdir:
+            toast.AddAction(ToastButton("View Folder", "open_folder"))
+            def _on_click(args: ToastActivatedEventArgs, d=bdir):
+                if os.path.exists(d):
+                    os.startfile(d)
+            toast.on_activated = _on_click
+
     try:
-        # Use lock to prevent concurrency issues
-        with _notification_lock:
-            # Always log the notification
-            logging.info(f"📢 Notification [{notification_type}]: {title} - {message}")
-
-            # Use win10toast only; if it fails, no popup is shown
-            if _notifier_name == "win10toast" and not _win10toast_failed:
-                icon_path = get_icon_path()
-
-                # Format title with type prefix
-                if notification_type == "error":
-                    formatted_title = f"❌ {title}"
-                elif notification_type == "warning":
-                    formatted_title = f"⚠️ {title}"
-                elif notification_type == "success":
-                    formatted_title = f"✅ {title}"
-                else:  # info
-                    formatted_title = title
-
-                # Attempt to show win10toast notification
-                success = _notify_win10toast(formatted_title, message, icon_path)
-                if success:
-                    logging.info(f"✅ Notification displayed: {title}")
-                else:
-                    logging.warning(f"⚠️ Notification failed, logged only: {title}")
-
-            # If win10toast is unavailable or failed, no popup is shown — log only
-
+        _toaster.show_toast(toast)
     except Exception as e:
-        logging.error(f"❌ Notification system error: {str(e)}")
+        logging.warning(f"⚠️ Notification failed: {e}")
 
-# Convenience export functions
-def info(title, message):
-    """Display an informational notification"""
+
+# Convenience wrappers — unchanged public API
+def info(title: str, message: str) -> None:
+    """Send an informational notification."""
     show_notification(title, message, "info")
 
-def success(title, message):
-    """Display a success notification"""
+def success(title: str, message: str) -> None:
+    """Send a success notification."""
     show_notification(title, message, "success")
 
-def warning(title, message):
-    """Display a warning notification"""
+def warning(title: str, message: str) -> None:
+    """Send a warning notification."""
     show_notification(title, message, "warning")
 
-def error(title, message):
-    """Display an error notification"""
+def error(title: str, message: str) -> None:
+    """Send an error notification."""
     show_notification(title, message, "error")

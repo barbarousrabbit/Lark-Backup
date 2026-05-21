@@ -95,7 +95,7 @@ pyinstaller LarkBackup.spec
 - requests - API requests
 - schedule - Task scheduling
 - psutil - Process monitoring
-- win10toast - System notifications
+- windows-toasts - Windows 11 native system notifications (WinRT)
 - openpyxl - Excel file handling
 
 
