@@ -46,4 +46,5 @@ config/*.json
 *.zip
 
 # Build outputs
-*.spec
+dist/
+build/
