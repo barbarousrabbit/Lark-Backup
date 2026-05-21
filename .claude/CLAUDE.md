@@ -102,7 +102,7 @@ APP_ID / APP_SECRET / TOKEN are hardcoded in plaintext in `config.py` to support
 Edit the callers of `core/notification.py::show_notification(title, message, type)`. Valid types: `"success"` / `"warning"` / `"error"` / `"info"`
 
 ### Changing the Alert Threshold (How Many Rows Deleted Before Alert Notification)
-`core/data_comparator.py::compare_two_dates()` — the condition `if deleted_count > 50`
+`config.py::ALERT_DELETED_ROW_THRESHOLD = 50` — single source; referenced by both `data_comparator.py` and `alert_window.py`
 
 ### Changing the Daily Schedule Time
 `config.py::SCHEDULE_TIME = "09:00"` (requires restart after change)

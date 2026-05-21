@@ -25,8 +25,7 @@ class DataComparator:
         """
         self.backup_dir = backup_dir
         self.comparison_cache_file = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "data_comparison_cache.json"
+            config.get_program_dir(), "data_comparison_cache.json"
         )
 
     def get_backup_file_path(self, date_str: str) -> str:
@@ -201,8 +200,8 @@ class DataComparator:
 
                 logging.info(f"📊 Sheet '{sheet_name}': {count1} → {count2} (deleted: {deleted_count}, added: {added_count})")
 
-                # Focus on data loss: generate a warning if more than 50 records were deleted
-                if deleted_count > 50:
+                # Focus on data loss: generate a warning if deleted rows exceed the threshold
+                if deleted_count > config.ALERT_DELETED_ROW_THRESHOLD:
                     warning_msg = f"⚠️ Sheet '{sheet_name}' lost {deleted_count} records"
                     warnings.append(warning_msg)
                     logging.warning(warning_msg)

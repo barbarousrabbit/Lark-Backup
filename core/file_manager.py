@@ -41,9 +41,7 @@ class FileManager:
                 f.write(file_content)
 
             logging.info(f"✅ Saved: {file_path}")
-            if os.path.exists(file_path):
-                # Note explicitly when an existing file was overwritten
-                logging.info(f"📝 File updated: {filename}")
+            logging.info(f"📝 File updated: {filename}")
             return file_path
 
         except PermissionError as e:
@@ -77,9 +75,10 @@ class FileManager:
             except Exception as e:
                 logging.error(f"❌ Write failed: {e}")
 
-        # Strategy 2: use a timestamped filename
+        # Strategy 2: use a timestamped filename derived from the standard template
         timestamp = datetime.now().strftime("%H%M%S")
-        filename = f"Case Management Platform {date_str}_{timestamp}.xlsx"
+        base_name = config.BACKUP_FILENAME_TEMPLATE.format(date=date_str)
+        filename = base_name.replace(".xlsx", f"_{timestamp}.xlsx")
         timestamped_path = os.path.join(self.download_dir, filename)
 
         try:
@@ -99,16 +98,15 @@ class FileManager:
     def _try_fallback_save(self, file_content, date_str):
         """Save to the program directory when the target directory lacks write permission"""
         try:
-            # Create a backup folder inside the current working directory
-            current_dir = os.getcwd()
-            fallback_dir = os.path.join(current_dir, "backup")
+            fallback_dir = os.path.join(config.get_program_dir(), "backup")
 
             if not os.path.exists(fallback_dir):
                 os.makedirs(fallback_dir, exist_ok=True)
                 logging.info(f"✅ Created backup dir: {fallback_dir}")
 
             timestamp = datetime.now().strftime("%H%M%S")
-            filename = f"Case Management Platform {date_str}_{timestamp}.xlsx"
+            base_name = config.BACKUP_FILENAME_TEMPLATE.format(date=date_str)
+            filename = base_name.replace(".xlsx", f"_{timestamp}.xlsx")
             fallback_path = os.path.join(fallback_dir, filename)
 
             with open(fallback_path, 'wb') as f:

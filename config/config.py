@@ -49,7 +49,7 @@ NETWORK_CHECK_TIMEOUT = 3  # Network connection check timeout (seconds)
 NETWORK_RETRY_INITIAL_INTERVAL = 30  # Initial retry interval after network loss (seconds)
 NETWORK_RETRY_MAX_INTERVAL = 300  # Maximum retry interval after network loss (seconds)
 NETWORK_RETRY_MULTIPLIER = 1.5  # Multiplier for exponential backoff of retry interval
-MAX_RETRY_TIMES = 3  # Maximum retry attempts after network recovery
+ALERT_DELETED_ROW_THRESHOLD = 50  # Fire a data-loss alert when deleted rows exceed this
 
 # API URLs
 AUTH_URL = "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal"

@@ -25,7 +25,7 @@ if current_dir not in sys.path:
 
 # Import configuration and custom modules
 from config import config
-from core.network import with_network_retry, network_monitor
+from core.network import network_monitor
 from core.api_service import api_service
 from core.file_manager import file_manager
 from core.scheduler import task_scheduler
@@ -242,7 +242,6 @@ def _generate_failure_report(backup_date, error_msg, attempts=1):
         pass
 
 
-@with_network_retry
 def backup_task():
     """Orchestrates one full backup cycle. Returns True on success."""
     logging.info("🔄 Starting backup")
@@ -452,7 +451,6 @@ if __name__ == "__main__":
     elif "--uninstall" in _args:
         _cli_uninstall()        # shows MessageBox, then sys.exit()
 
-    logging.info(f"🎬 Script started, PID: {os.getpid()}")
     exit_code = main()
     logging.info(f"👋 Terminated, exit code: {exit_code}. PID: {os.getpid()}")
     sys.exit(exit_code)

@@ -3,13 +3,14 @@ Alert Module
 Handles data loss alerts via system notifications with per-day deduplication.
 
 Replaces the previous customtkinter popup window. All alerts are delivered
-through the existing win10toast notification system (show_notification),
+through the windows-toasts notification system (show_notification),
 keeping the distributed exe lean and dependency-free of any GUI toolkit.
 """
 
 import logging
 from typing import Dict, List
 
+from config import config
 from core.notification import show_notification
 
 
@@ -17,9 +18,9 @@ class AlertManager:
     """
     Manages data loss alert notifications with per-day deduplication.
 
-    Only fires when at least one sheet has lost more than 50 rows
-    (consistent with the threshold in data_comparator). At most one
-    alert is shown per date per process lifetime.
+    Only fires when at least one sheet has lost more than
+    config.ALERT_DELETED_ROW_THRESHOLD rows (consistent with data_comparator).
+    At most one alert is shown per date per process lifetime.
     """
 
     def __init__(self):
@@ -47,7 +48,7 @@ class AlertManager:
 
         significant_changes = {
             sheet: info for sheet, info in comparison_result.items()
-            if info.get('deleted_count', 0) > 50
+            if info.get('deleted_count', 0) > config.ALERT_DELETED_ROW_THRESHOLD
         }
 
         if not significant_changes:

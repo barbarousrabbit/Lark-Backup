@@ -172,14 +172,9 @@ class APIService:
                     else:
                         # Continue polling regardless of job_status as long as file_token is absent
                         if job_status == 2:
-                            # Log detailed status information without failing immediately
                             error_msg = result.get("job_error_msg", "")
-                            file_name = result.get("file_name", "")
-                            file_size = result.get("file_size", 0)
-                            file_extension = result.get("file_extension", "")
-
-                            # Status=2 details removed
-
+                            logging.warning(f"⚠️ Export job status=2 (no file_token yet): {error_msg!r} "
+                                            f"(attempt {attempt + 1}/{config.MAX_EXPORT_STATUS_CHECKS})")
                         else:
                             logging.info(f"🔄 Waiting... status={job_status} (attempt {attempt + 1}/{config.MAX_EXPORT_STATUS_CHECKS})")
                 else:
@@ -208,8 +203,8 @@ class APIService:
         try:
             logging.info("🔄 Downloading file...")
 
-            # Use non-streaming download
-            response = requests.get(url, headers=headers, timeout=30)
+            # 10s connect timeout, 300s read timeout — file can be up to ~200 MB
+            response = requests.get(url, headers=headers, timeout=(10, 300))
 
             if response.status_code == 200:
                 # Retrieve content

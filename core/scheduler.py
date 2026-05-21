@@ -153,14 +153,5 @@ class TaskScheduler:
 
         return default_interval
 
-    def _start_process_monitor(self):
-        """Start the process monitor thread — does nothing in process-replacement mode"""
-        logging.info("ℹ️ Process monitoring disabled (using PID file for process management)")
-        return
-
-    def _process_monitor_loop(self):
-        """Process monitor loop — does nothing in multi-instance mode"""
-        pass
-
 # Create the global scheduler instance
 task_scheduler = TaskScheduler()

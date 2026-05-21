@@ -306,7 +306,7 @@ class ReportGenerator:
 
         <div class="footer">
             <div>Generated at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</div>
-            <div class="timestamp">Lark Backup System © 2025</div>
+            <div class="timestamp">Lark Backup System © {datetime.now().year}</div>
         </div>
     </div>
 </body>
@@ -382,7 +382,9 @@ class ReportGenerator:
                         <th>Sheet</th>
                         <th>Previous</th>
                         <th>Current</th>
-                        <th>Change</th>
+                        <th>Net Change</th>
+                        <th>Deleted</th>
+                        <th>Added</th>
                         <th>Status</th>
                     </tr>
                 </thead>
@@ -392,6 +394,8 @@ class ReportGenerator:
                 before = diff_info.get('before', 0)
                 after = diff_info.get('after', 0)
                 difference = diff_info.get('difference', 0)
+                deleted_count = diff_info.get('deleted_count', 0)
+                added_count = diff_info.get('added_count', 0)
 
                 if difference < 0:
                     change_class = "decrease"
@@ -406,12 +410,17 @@ class ReportGenerator:
                     change_symbol = "→"
                     status = "Unchanged"
 
+                deleted_class = "decrease" if deleted_count > 0 else "unchanged"
+                added_class = "increase" if added_count > 0 else "unchanged"
+
                 content += f'''
                     <tr>
                         <td>{html.escape(sheet_name)}</td>
                         <td>{before}</td>
                         <td>{after}</td>
                         <td class="{change_class}">{change_symbol} {abs(difference)}</td>
+                        <td class="{deleted_class}">{deleted_count}</td>
+                        <td class="{added_class}">{added_count}</td>
                         <td>{status}</td>
                     </tr>'''
 
