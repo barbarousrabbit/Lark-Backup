@@ -184,10 +184,28 @@ def backup_task():
     # then follow with the comparison detail as supplementary information.
     show_notification("Backup Successful", f"Saved: {os.path.basename(saved_path)}", "success")
 
-    if warnings:
-        show_notification("Data Comparison Alert", f"{len(differences)} changes, {len(warnings)} warnings", "warning")
+    if warnings and differences:
+        # Real data-loss warnings with actual sheet differences — show alert
+        n_sheets = len(differences)
+        n_warn = len(warnings)
+        sheet_label = "sheet" if n_sheets == 1 else "sheets"
+        warn_label = "warning" if n_warn == 1 else "warnings"
+        show_notification(
+            "Data Comparison Alert",
+            f"{n_sheets} {sheet_label} changed, {n_warn} {warn_label}",
+            "warning"
+        )
     elif differences:
-        show_notification("Data Comparison Complete", f"{len(differences)} changes", "info")
+        # Changes detected but no warnings (no data loss threshold exceeded)
+        n_sheets = len(differences)
+        sheet_label = "sheet" if n_sheets == 1 else "sheets"
+        show_notification(
+            "Data Comparison Complete",
+            f"{n_sheets} {sheet_label} changed",
+            "info"
+        )
+    # If warnings but no differences (e.g. previous backup file missing):
+    # comparison could not run — already logged, no misleading toast needed
 
     return True
 
