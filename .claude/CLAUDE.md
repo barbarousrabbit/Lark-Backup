@@ -16,7 +16,7 @@ main.py                    # Entry point: logging init → singleton check → s
 ├── core/api_service       # Lark API: token → wiki → export → download
 ├── core/file_manager      # File saving, path derived from config.BACKUP_FILENAME_TEMPLATE
 ├── core/data_comparator   # openpyxl reads xlsx, Counter multiset diff comparison
-├── core/alert_window      # customtkinter popup (gracefully degrades to log when no GUI)
+├── core/alert_window      # data loss alerts via win10toast (per-day deduplication)
 ├── core/notification      # win10toast system notifications
 └── core/report_generator  # HTML + JSON daily reports
 ```
@@ -61,10 +61,7 @@ Both `file_manager.py` and `data_comparator.py` derive their paths via `.format(
 ### 6. Data Comparison — Counter, Not set
 `data_comparator.py::get_data_rows_counter()` returns a `collections.Counter` (multiset); comparison uses Counter subtraction. **Do not revert to set** — sets silently drop additions/deletions of duplicate rows.
 
-### 7. UI Dependency Graceful Degradation
-`alert_window.py` defers the customtkinter import inside a `try/except`. When `_UI_AVAILABLE = False`, it silently falls back to log output. **Do not `import customtkinter` at the module top level.**
-
-### 8. API Credentials Stored in Plaintext (Known Risk, Accepted)
+### 7. API Credentials Stored in Plaintext (Known Risk, Accepted)
 APP_ID / APP_SECRET / TOKEN are hardcoded in plaintext in `config.py` to support zero-configuration single-exe distribution. **Do not introduce runtime environment variable reading** — it breaks the exe user experience.
 
 ---
@@ -73,7 +70,7 @@ APP_ID / APP_SECRET / TOKEN are hardcoded in plaintext in `config.py` to support
 
 ### Python Version & Platform
 - Python 3.8+, **Windows only**
-- Packaging: `pyinstaller --onefile --noconsole --icon=assets/file_download.ico main.py`
+- Packaging: `pyinstaller LarkBackup.spec` (spec excludes tkinter/customtkinter for a smaller exe)
 
 ### Logging
 - All logging goes through the standard `logging` module — **do not use print**
@@ -104,7 +101,7 @@ APP_ID / APP_SECRET / TOKEN are hardcoded in plaintext in `config.py` to support
 ### Changing Notification Content
 Edit the callers of `core/notification.py::show_notification(title, message, type)`. Valid types: `"success"` / `"warning"` / `"error"` / `"info"`
 
-### Changing the Alert Threshold (How Many Rows Deleted Before Popup)
+### Changing the Alert Threshold (How Many Rows Deleted Before Alert Notification)
 `core/data_comparator.py::compare_two_dates()` — the condition `if deleted_count > 50`
 
 ### Changing the Daily Schedule Time

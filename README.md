@@ -14,8 +14,7 @@ A Python-based Windows tool that automatically backs up Lark (Feishu) Bitable sh
 - **Subprocess management**: Tracks and cleans up child processes to prevent orphans
 - **Enhanced logging**: Ensures logs are written correctly and are easy to troubleshoot
 - **Data comparison**: Compares backup data across dates to detect changes and deletions
-- **Data loss alerts**: Shows a warning window when more than 50 rows are deleted
-- **Modern UI**: Uses customtkinter for a polished alert interface
+- **Data loss alerts**: Sends an error notification when more than 50 rows are deleted from any sheet
 - **Daily reports**: Generates detailed HTML and JSON reports saved in the `Daily_Reports` folder
 - **Smart notifications**: Uses win10toast with distinct success/warning/error notification types
 
@@ -40,7 +39,7 @@ LarkBackup/
 │   ├── notification.py     # Notification module
 │   ├── scheduler.py        # Task scheduler
 │   ├── data_comparator.py  # Data comparison module
-│   └── alert_window.py     # Alert window module
+│   └── alert_window.py     # Data loss alert notifications
 │
 ├── main.py                 # Program entry point
 ├── requirements.txt        # Dependency list
@@ -83,11 +82,11 @@ SCHEDULE_TIME = "01:00"  # Daily scheduled task time, format: HH:MM
 
 ## Building a Distribution Package
 
-Use PyInstaller to create a standalone executable:
+Use the provided spec file (recommended — excludes unused GUI toolkits for a smaller exe):
 
 ```bash
 pip install pyinstaller
-pyinstaller --onefile --noconsole --icon=assets/file_download.ico main.py
+pyinstaller LarkBackup.spec
 ```
 
 ## Dependencies
@@ -98,8 +97,6 @@ pyinstaller --onefile --noconsole --icon=assets/file_download.ico main.py
 - psutil - Process monitoring
 - win10toast - System notifications
 - openpyxl - Excel file handling
-- customtkinter - Modern UI components
-- Pillow - Image processing
 
 
 ## Notes
