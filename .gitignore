@@ -29,7 +29,7 @@ env/
 .vscode/
 .idea/
 .cursor/
-# Claude Code: 跟踪 CLAUDE.md，忽略本地权限配置和临时目录
+# Claude Code: track CLAUDE.md, ignore local permission config and temp dirs
 .claude/settings.local.json
 .claude/worktrees/
 *.swp
