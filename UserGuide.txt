@@ -12,12 +12,12 @@ QUICK START
   or run LarkBackup.exe --uninstall.
 
 INSTALL AS AUTOSTART SERVICE (recommended)
-  Double-click install.bat
+  Double-click enable_autostart.vbs
   This registers the program to start automatically at Windows login,
   then launches it immediately. No further action needed.
 
 UNINSTALL
-  Double-click uninstall.bat
+  Double-click disable_autostart.vbs
   Removes the autostart entry and stops the running service.
 
 WHAT IT DOES
