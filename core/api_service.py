@@ -171,13 +171,11 @@ class APIService:
                         logging.info("✅ Export ready")
                         return file_token
 
-                    # job_status=2 is a terminal error; break immediately instead of waiting the full timeout
-                    if job_status == 2:
-                        error_msg = result.get("job_error_msg", "")
-                        logging.error(f"❌ Export job failed permanently (status=2): {error_msg!r}")
-                        return None
-
-                    logging.info(f"🔄 Waiting... status={job_status} (attempt {attempt + 1}/{config.MAX_EXPORT_STATUS_CHECKS})")
+                    # file_token is the sole success condition; status=2 is transient on the Lark API
+                    # (returned on first polls before the file is ready) — keep polling until file_token appears
+                    error_msg = result.get("job_error_msg", "")
+                    log_fn = logging.warning if job_status == 2 else logging.info
+                    log_fn(f"⚠️ Export job status={job_status} (no file_token yet): {error_msg!r} (attempt {attempt + 1}/{config.MAX_EXPORT_STATUS_CHECKS})")
                 else:
                     logging.error(f"❌ Failed to get task status, status code: {response.status_code}")
 
