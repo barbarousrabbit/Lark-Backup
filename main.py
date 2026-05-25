@@ -63,25 +63,29 @@ def _cli_install() -> None:
         _msgbox("Lark Backup — Install Failed", f"Could not register autostart:\n{e}", 0x10)
         os._exit(1)
 
+    # Strip _MEIPASS2 so the service creates its own PyInstaller temp dir
+    # instead of reusing this process's _MEI directory (which gets deleted on exit).
+    env = dict(os.environ)
+    env.pop("_MEIPASS2", None)
+
     # Launch the backup service (same exe, no --install flag), fully detached
     subprocess.Popen(
         [exe],
+        env=env,
         creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
         close_fds=True,
     )
 
+    # MB_SETFOREGROUND (0x10000) brings the dialog to the front even when
+    # the process was launched hidden (e.g. via VBScript SW_HIDE).
     _msgbox(
         "Lark Backup — Installed",
         "Autostart registered.\n\n"
         "Lark Backup will start automatically on every login.\n"
         "The backup service is now running in the background.\n\n"
         "To uninstall:  disable_autostart.vbs",
-        0x40,
+        0x40 | 0x10000,
     )
-    # os._exit skips Python teardown and PyInstaller bootloader cleanup,
-    # preventing a spurious "Failed to remove temporary directory" warning
-    # that appears when DLLs are still mapped at the point sys.exit() returns
-    # control to the bootloader. _MEI temp dir is cleaned up by Windows later.
     os._exit(0)
 
 
