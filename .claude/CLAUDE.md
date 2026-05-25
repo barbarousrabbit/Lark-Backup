@@ -116,6 +116,7 @@ pyinstaller LarkBackup.spec
 ```
 
 **Distribution zip name is always `LarkBackup.zip` — no date suffix, no version suffix.** Overwrite the existing file each time.
+The zip must contain exactly: `LarkBackup.exe`, `install.bat`, `uninstall.bat`, `UserGuide.txt`.
 
 ### Installing / Uninstalling (end-user, packaged exe)
 ```

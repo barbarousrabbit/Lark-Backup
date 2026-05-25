@@ -12,14 +12,12 @@ QUICK START
   or run LarkBackup.exe --uninstall.
 
 INSTALL AS AUTOSTART SERVICE (recommended)
-  Open a terminal (cmd or PowerShell) in the same folder and run:
-    LarkBackup.exe --install
+  Double-click install.bat
   This registers the program to start automatically at Windows login,
   then launches it immediately. No further action needed.
 
 UNINSTALL
-  In a terminal:
-    LarkBackup.exe --uninstall
+  Double-click uninstall.bat
   Removes the autostart entry and stops the running service.
 
 WHAT IT DOES
