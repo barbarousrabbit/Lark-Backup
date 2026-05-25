@@ -32,7 +32,8 @@ main.py                    # Entry point: logging init → singleton check → s
 `main.py` holds a module-level `threading.Lock()`; `run_backup_with_retry()` acquires it with `blocking=False`. If a backup is already running (startup thread or scheduled thread), the new trigger immediately returns False and logs — **it does not queue**. **Do not call `backup_task()` directly outside the lock.**
 
 ### 3. Retry Control — Single Entry Point `run_backup_with_retry()`
-- Retry scheduling happens only inside the while loop of `main.py::run_backup_with_retry()`
+- `run_backup_with_retry()` acquires `_backup_lock` then delegates to `_run_backup_loop()` — the while loop and all retry logic lives in `_run_backup_loop()`
+- `backup_date` is computed **once** at the top of `_run_backup_loop()` and passed as a parameter to `backup_task(backup_date)` — prevents midnight drift across retries
 - Network recovery waiting is serial-blocking via `network_monitor.wait_for_recovery()` — **no background threads**
 - The `@with_network_retry` decorator only performs a pre-call network check; returns None if offline — registers no callbacks
 
@@ -141,6 +142,8 @@ CLI is handled in `main.py::_cli_install()` / `_cli_uninstall()` before logging 
 | No automated tests | Pending | Key scenarios: network interruption recovery, duplicate-row comparison, dual-instance contention |
 | `_is_scheduled_time()` time-window check | Acceptable | 5-minute window distinguishes manual vs. scheduled start; cross-midnight bug already fixed |
 | No cleanup mechanism for report directory | Pending | Daily_Reports/ and JSON reports have no automatic expiration/deletion |
+| `AUTH_URL` uses `open.feishu.cn`, all other API URLs use `open.larksuite.com` | Acceptable | Cross-domain token works in practice (Feishu/Lark share backend); verified end-to-end. Make consistent if API failures appear |
+| `count_data_rows()` breaks on first empty row | Acceptable | Assumes contiguous data (valid for Lark-exported xlsx); sparse sheets would under-count rows |
 
 ---
 
