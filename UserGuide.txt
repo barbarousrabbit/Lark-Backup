@@ -1,0 +1,45 @@
+Lark Backup — User Guide
+========================
+
+REQUIREMENTS
+  - Windows 10 (build 19041+) or Windows 11
+  - D: drive must be present (backups saved to D:\Case Management Platform Backup\)
+  - Internet access to reach Lark / Feishu API
+
+QUICK START
+  Double-click LarkBackup.exe to run the backup service immediately.
+  The program will run silently in the background and stop when you close the process.
+
+INSTALL AS AUTOSTART SERVICE (recommended)
+  Run in a terminal or double-click:
+    LarkBackup.exe --install
+  This registers the program to start automatically at Windows login,
+  then launches it immediately. No further action needed.
+
+UNINSTALL
+    LarkBackup.exe --uninstall
+  Removes the autostart entry and stops the running service.
+
+WHAT IT DOES
+  - Runs a backup daily at 09:00
+  - Also performs one backup immediately on startup
+  - Downloads the Bitable sheet from Lark and saves it as Excel
+  - Backup files:  D:\Case Management Platform Backup\
+  - Daily reports: D:\Case Management Platform Backup\Daily_Reports\
+  - Logs:          D:\Case Management Platform Backup\logs\  (when run via --install)
+      or           <exe folder>\logs\                        (when run directly)
+
+RETRY BEHAVIOR
+  On failure, the program retries up to 5 times per day (once per 60 seconds).
+  If all attempts fail, it will try again the next day at 09:00.
+
+NOTIFICATIONS
+  Windows toast notifications appear on backup success, failure, or data-loss alerts.
+  Requires Windows notification permission for "LarkBackup".
+
+SINGLE INSTANCE
+  Only one copy can run at a time. A second launch is silently rejected.
+
+TROUBLESHOOTING
+  Check the log file for details on any failure.
+  Common causes: network unavailable, D: drive missing, Lark API token expired.
