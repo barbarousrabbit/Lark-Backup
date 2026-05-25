@@ -109,6 +109,12 @@ Edit the callers of `core/notification.py::show_notification(title, message, typ
 `config.py::SCHEDULE_TIME = "09:00"` (requires restart after change)
 
 ### Building a Release Package
+
+**Before every build — mandatory cleanup (in this order):**
+1. Stop the running service: run `disable_autostart.vbs` (or kill via Task Manager)
+2. Remove autostart registry entry: `reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v LarkBackup /f` (ignore "not found" error)
+3. Delete the installed directory on D: drive (e.g. `D:\LarkBackup\`) — ensures the next install test is clean
+
 ```bash
 pip install pyinstaller
 pyinstaller LarkBackup.spec

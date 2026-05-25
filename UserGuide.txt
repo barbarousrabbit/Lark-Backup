@@ -37,7 +37,9 @@ NOTIFICATIONS
   Requires Windows notification permission for "LarkBackup".
 
 SINGLE INSTANCE
-  Only one copy can run at a time. A second launch is silently rejected.
+  Only one copy runs at a time. Launching the exe a second time terminates
+  the running instance and restarts the service from scratch. To stop the
+  service without restarting, use disable_autostart.vbs or Task Manager.
 
 TROUBLESHOOTING
   Check the log file for details on any failure.
