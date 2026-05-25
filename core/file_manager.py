@@ -25,7 +25,7 @@ class FileManager:
                 os.makedirs(self.download_dir, exist_ok=True)
                 logging.info(f"✅ Created dir: {self.download_dir}")
             else:
-                logging.info(f"📁 Dir exists: {self.download_dir}")
+                logging.debug(f"📁 Dir exists: {self.download_dir}")
         except Exception as e:
             logging.error(f"❌ Cannot create dir {self.download_dir}: {e}")
             raise
@@ -77,8 +77,8 @@ class FileManager:
 
         # Strategy 2: use a timestamped filename derived from the standard template
         timestamp = datetime.now().strftime("%H%M%S")
-        base_name = config.BACKUP_FILENAME_TEMPLATE.format(date=date_str)
-        filename = base_name.replace(".xlsx", f"_{timestamp}.xlsx")
+        base, ext = os.path.splitext(config.BACKUP_FILENAME_TEMPLATE.format(date=date_str))
+        filename = f"{base}_{timestamp}{ext}"
         timestamped_path = os.path.join(self.download_dir, filename)
 
         try:
@@ -105,8 +105,8 @@ class FileManager:
                 logging.info(f"✅ Created backup dir: {fallback_dir}")
 
             timestamp = datetime.now().strftime("%H%M%S")
-            base_name = config.BACKUP_FILENAME_TEMPLATE.format(date=date_str)
-            filename = base_name.replace(".xlsx", f"_{timestamp}.xlsx")
+            base, ext = os.path.splitext(config.BACKUP_FILENAME_TEMPLATE.format(date=date_str))
+            filename = f"{base}_{timestamp}{ext}"
             fallback_path = os.path.join(fallback_dir, filename)
 
             with open(fallback_path, 'wb') as f:
@@ -119,11 +119,6 @@ class FileManager:
         except Exception as e:
             logging.error(f"❌ Backup failed: {e}")
             return None
-
-    def get_file_path(self, date_str):
-        """Generate a file path from a date string"""
-        filename = config.BACKUP_FILENAME_TEMPLATE.format(date=date_str)
-        return os.path.join(self.download_dir, filename)
 
 # Global singleton
 file_manager = FileManager()

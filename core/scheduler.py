@@ -7,9 +7,7 @@ import threading
 import time
 import logging
 import schedule
-import psutil
-import os
-from datetime import datetime, timedelta
+from datetime import datetime
 
 # Import configuration
 from config import config
@@ -22,8 +20,7 @@ class TaskScheduler:
         self.schedule_time = schedule_time
         self.stop_event = threading.Event()
         self.scheduler_thread = None
-        self.process_monitor_thread = None
-        self._scheduled_task = None  # Store the registered task function
+        self._scheduled_task = None
 
     def schedule_daily_task(self, task_func):
         """Set up a daily scheduled task"""
@@ -90,9 +87,6 @@ class TaskScheduler:
 
         if self.scheduler_thread and self.scheduler_thread.is_alive():
             self.scheduler_thread.join(timeout=1.0)
-
-        if self.process_monitor_thread and self.process_monitor_thread.is_alive():
-            self.process_monitor_thread.join(timeout=1.0)
 
         logging.info("✅ Scheduler stopped")
 

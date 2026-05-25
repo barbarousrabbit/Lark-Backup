@@ -9,7 +9,7 @@ import logging
 from collections import Counter
 from datetime import datetime, timedelta
 import openpyxl
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple
 
 from config import config
 
@@ -79,7 +79,7 @@ class DataComparator:
                         break
 
                 sheet_counts[sheet_name] = row_count
-                logging.info(f"Sheet '{sheet_name}': {row_count} rows")
+                logging.debug(f"Sheet '{sheet_name}': {row_count} rows")
 
             return sheet_counts
 
@@ -225,35 +225,6 @@ class DataComparator:
         logging.info(f"🔍 Comparing {previous_date_str} with {current_date_str}")
         return self.compare_two_dates(previous_date_str, current_date_str)
 
-    def check_historical_data(self, reference_date_str: str, days_back: int = 7) -> Dict[str, List[int]]:
-        """
-        Check historical data trends
-
-        Args:
-            reference_date_str: Reference date
-            days_back: Number of days to look back
-
-        Returns:
-            List of historical data row counts per worksheet
-        """
-        reference_date = datetime.strptime(reference_date_str, "%Y-%m-%d")
-        historical_data = {}
-
-        for i in range(days_back):
-            check_date = reference_date - timedelta(days=i)
-            check_date_str = check_date.strftime("%Y-%m-%d")
-
-            if self.file_exists(check_date_str):
-                file_path = self.get_backup_file_path(check_date_str)
-                counts = self.count_data_rows(file_path)
-
-                for sheet_name, count in counts.items():
-                    if sheet_name not in historical_data:
-                        historical_data[sheet_name] = []
-                    historical_data[sheet_name].append((check_date_str, count))
-
-        return historical_data
-
     def save_comparison_result(self, date_str: str, comparison_result: Dict):
         """
         Save comparison result to the cache file
@@ -289,27 +260,6 @@ class DataComparator:
 
         except Exception as e:
             logging.error(f"❌ Error saving comparison cache: {e}")
-
-    def load_comparison_result(self, date_str: str) -> Optional[Dict]:
-        """
-        Load comparison result from cache
-
-        Args:
-            date_str: Date string
-
-        Returns:
-            Comparison result, or None if not found
-        """
-        try:
-            if os.path.exists(self.comparison_cache_file):
-                with open(self.comparison_cache_file, 'r', encoding='utf-8') as f:
-                    cache = json.load(f)
-                    if date_str in cache:
-                        return cache[date_str]['result']
-        except Exception as e:
-            logging.error(f"❌ Error loading comparison cache: {e}")
-
-        return None
 
 # Global singleton
 data_comparator = DataComparator(config.DOWNLOAD_DIR)

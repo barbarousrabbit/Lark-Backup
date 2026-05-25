@@ -326,7 +326,7 @@ class ReportGenerator:
             content += f'''
                 <div class="info-row">
                     <span class="info-label">Backup File:</span>
-                    <span class="info-value">{os.path.basename(backup_details['file_path'])}</span>
+                    <span class="info-value">{html.escape(os.path.basename(backup_details['file_path']))}</span>
                 </div>'''
 
         # Add backup time
@@ -334,7 +334,7 @@ class ReportGenerator:
             content += f'''
                 <div class="info-row">
                     <span class="info-label">Backup Time:</span>
-                    <span class="info-value">{backup_details['backup_time']}</span>
+                    <span class="info-value">{html.escape(backup_details['backup_time'])}</span>
                 </div>'''
 
         # Add file size
@@ -457,35 +457,6 @@ class ReportGenerator:
                     logging.error(f"❌ Failed to load report {json_path}: {e}")
 
         return reports
-
-    def generate_weekly_summary(self) -> str:
-        """Generate a weekly summary."""
-        reports = self.get_recent_reports(7)
-
-        if not reports:
-            return None
-
-        # Statistics
-        total_backups = len(reports)
-        successful_backups = sum(1 for r in reports if r['backup']['success'])
-        failed_backups = total_backups - successful_backups
-        total_warnings = sum(len(r.get('warnings', [])) for r in reports)
-
-        summary = {
-            "period": f"{(datetime.now() - timedelta(days=6)).strftime('%Y-%m-%d')} to {datetime.now().strftime('%Y-%m-%d')}",
-            "total_backups": total_backups,
-            "successful_backups": successful_backups,
-            "failed_backups": failed_backups,
-            "total_warnings": total_warnings,
-            "success_rate": f"{(successful_backups/total_backups*100):.1f}%" if total_backups > 0 else "0%"
-        }
-
-        summary_path = os.path.join(self.report_dir, f"Weekly_Summary_{datetime.now().strftime('%Y-%m-%d')}.json")
-
-        with open(summary_path, 'w', encoding='utf-8') as f:
-            json.dump(summary, f, ensure_ascii=False, indent=2)
-
-        return summary_path
 
 # Global singleton
 report_generator = ReportGenerator(config.DOWNLOAD_DIR)

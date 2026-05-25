@@ -155,8 +155,11 @@ def show_notification(title: str, message: str, notification_type: str = "info")
         if bdir:
             toast.AddAction(ToastButton("View Folder", "open_folder"))
             def _on_click(args: ToastActivatedEventArgs, d=bdir):
-                if os.path.exists(d):
-                    os.startfile(d)
+                try:
+                    if os.path.exists(d):
+                        os.startfile(d)
+                except Exception as exc:
+                    logging.warning(f"⚠️ Could not open folder {d}: {exc}")
             toast.on_activated = _on_click
 
     try:
@@ -164,20 +167,3 @@ def show_notification(title: str, message: str, notification_type: str = "info")
     except Exception as e:
         logging.warning(f"⚠️ Notification failed: {e}")
 
-
-# Convenience wrappers — unchanged public API
-def info(title: str, message: str) -> None:
-    """Send an informational notification."""
-    show_notification(title, message, "info")
-
-def success(title: str, message: str) -> None:
-    """Send a success notification."""
-    show_notification(title, message, "success")
-
-def warning(title: str, message: str) -> None:
-    """Send a warning notification."""
-    show_notification(title, message, "warning")
-
-def error(title: str, message: str) -> None:
-    """Send an error notification."""
-    show_notification(title, message, "error")

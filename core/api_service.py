@@ -6,7 +6,6 @@ Handles interactions with the Lark API
 import requests
 import time
 import logging
-import json
 
 # Import config and modules
 from config import config
@@ -51,7 +50,10 @@ class APIService:
             if response.status_code == 200:
                 response_data = response.json()
                 if response_data.get("code") == 0:
-                    self._tenant_token = response_data.get("tenant_access_token")
+                    token = response_data.get("tenant_access_token")
+                    if not token:
+                        raise LarkAPIError("tenant_access_token missing in auth response", response=response_data)
+                    self._tenant_token = token
                     # Set expiry time (conservatively, 5 minutes before actual expiry)
                     expires_in = response_data.get("expire", 7200)
                     self._token_expiry = current_time + expires_in - 300
@@ -165,18 +167,17 @@ class APIService:
 
                     # Status details removed
 
-                    # Use the presence of file_token as the sole success condition
                     if file_token and file_token.strip():
                         logging.info("✅ Export ready")
                         return file_token
-                    else:
-                        # Continue polling regardless of job_status as long as file_token is absent
-                        if job_status == 2:
-                            error_msg = result.get("job_error_msg", "")
-                            logging.warning(f"⚠️ Export job status=2 (no file_token yet): {error_msg!r} "
-                                            f"(attempt {attempt + 1}/{config.MAX_EXPORT_STATUS_CHECKS})")
-                        else:
-                            logging.info(f"🔄 Waiting... status={job_status} (attempt {attempt + 1}/{config.MAX_EXPORT_STATUS_CHECKS})")
+
+                    # job_status=2 is a terminal error; break immediately instead of waiting the full timeout
+                    if job_status == 2:
+                        error_msg = result.get("job_error_msg", "")
+                        logging.error(f"❌ Export job failed permanently (status=2): {error_msg!r}")
+                        return None
+
+                    logging.info(f"🔄 Waiting... status={job_status} (attempt {attempt + 1}/{config.MAX_EXPORT_STATUS_CHECKS})")
                 else:
                     logging.error(f"❌ Failed to get task status, status code: {response.status_code}")
 

@@ -188,33 +188,50 @@ def _download_and_save(backup_date):
         file_manager.ensure_download_dir_exists()
         tenant_token = api_service.get_tenant_token()
         if not tenant_token:
-            logging.error("❌ API token failed"); details['error'] = 'token failed'; return None, details
+            logging.error("❌ API token failed")
+            details['error'] = 'token failed'
+            return None, details
         wiki_data = api_service.get_wiki_data()
         if not wiki_data:
-            logging.error("❌ Wiki data failed"); details['error'] = 'wiki failed'; return None, details
+            logging.error("❌ Wiki data failed")
+            details['error'] = 'wiki failed'
+            return None, details
         obj_token = api_service.extract_obj_token(wiki_data)
         ticket = api_service.create_export_task(obj_token)
         if not ticket:
-            logging.error("❌ Export task failed"); details['error'] = 'export failed'; return None, details
+            logging.error("❌ Export task failed")
+            details['error'] = 'export failed'
+            return None, details
         file_token = api_service.get_export_task_status(ticket, obj_token)
         if not file_token:
-            logging.error("❌ File token failed"); details['error'] = 'file token failed'; return None, details
+            logging.error("❌ File token failed")
+            details['error'] = 'file token failed'
+            return None, details
         file_content = api_service.download_file(file_token)
         if not file_content:
-            logging.error("❌ Download failed"); details['error'] = 'download failed'; return None, details
+            logging.error("❌ Download failed")
+            details['error'] = 'download failed'
+            return None, details
         saved_path = file_manager.save_file(file_content, backup_date)
         if saved_path:
             details['file_path'] = saved_path
             details['success'] = True
-            try: details['file_size'] = os.path.getsize(saved_path)
-            except: pass
+            try:
+                details['file_size'] = os.path.getsize(saved_path)
+            except OSError:
+                pass
             return saved_path, details
-        details['error'] = 'save failed'; return None, details
+        details['error'] = 'save failed'
+        return None, details
     except ValueError as e:
-        logging.error(f"❌ {e}"); details['error'] = str(e); return None, details
+        logging.error(f"❌ {e}")
+        details['error'] = str(e)
+        return None, details
     except Exception as e:
-        logging.error(f"❌ Backup error: {e}"); logging.error(traceback.format_exc())
-        details['error'] = str(e); return None, details
+        logging.error(f"❌ Backup error: {e}")
+        logging.error(traceback.format_exc())
+        details['error'] = str(e)
+        return None, details
 
 
 def _compare_and_alert(backup_date):
@@ -242,15 +259,16 @@ def _generate_failure_report(backup_date, error_msg, attempts=1):
         pass
 
 
-def backup_task():
+def backup_task(backup_date=None):
     """Orchestrates one full backup cycle. Returns True on success."""
     logging.info("🔄 Starting backup")
-    backup_date = config.get_backup_date()
+    if backup_date is None:
+        backup_date = config.get_backup_date()
 
     saved_path, details = _download_and_save(backup_date)
 
     if not saved_path:
-        # record_attempt() has not been called yet, so +1 gives the current attempt number
+        # attempt_count is get_today_attempts()+1 because record_attempt() runs after this returns
         _generate_failure_report(backup_date, details.get('error', 'unknown'),
                                  retry_manager.get_today_attempts() + 1)
         return False
@@ -326,7 +344,7 @@ def _run_backup_loop():
             logging.info("⏳ Network unavailable, waiting for recovery before attempt…")
             network_monitor.wait_for_recovery()
 
-        result = backup_task()
+        result = backup_task(backup_date)
         attempt_count = retry_manager.record_attempt(success=result)
 
         if result:
@@ -336,8 +354,6 @@ def _run_backup_loop():
         if remaining <= 0:
             logging.error(f"❌ Daily attempts exhausted ({config.MAX_DAILY_ATTEMPTS} times)")
             show_notification("Backup Failed", f"All {config.MAX_DAILY_ATTEMPTS} attempts failed today", "error")
-            _generate_failure_report(backup_date, f"All {config.MAX_DAILY_ATTEMPTS} attempts failed",
-                                     attempt_count)
             return False
 
         logging.warning(f"❌ Failed (attempt {attempt_count}), {remaining} remaining")
@@ -386,7 +402,9 @@ def main():
 
     # Initialize the single-instance manager and start it (terminates any old instance)
     _instance_manager = init_single_instance_manager()
-    _instance_manager.start()
+    if not _instance_manager.start():
+        logging.error("❌ Failed to acquire single-instance mutex; exiting.")
+        sys.exit(1)
 
     try:
         setup_console_encoding()
@@ -436,7 +454,7 @@ def main():
             handler.flush()
 
         # Stop the scheduler
-        if 'task_scheduler' in globals() and task_scheduler.scheduler_thread is not None:
+        if task_scheduler.scheduler_thread is not None:
             task_scheduler.stop()
         logging.info(f"🧼 Cleanup finished, PID {os.getpid()}.")
 
