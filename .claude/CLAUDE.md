@@ -132,6 +132,7 @@ CLI is handled in `main.py::_cli_install()` / `_cli_uninstall()` before logging 
 - **Do not** call `logging.basicConfig()` at the top level of any `core/` module
 - **Do not** use a local variable named `html` inside functions — it conflicts with the stdlib `import html` (historical bug, already fixed)
 - **Do not** add new `init_xxx()` factory functions that return new instances — all core objects must be module-level singletons
+- **Do not** treat `job_status=2` as a terminal error in `api_service.py::get_export_task_status()` — the Lark export API returns `status=2` transiently on first polls before the file is ready; **`file_token` presence is the sole success condition**; break only on timeout or HTTP error (regression history: commit `dfb9829` introduced this bug, `aba248e` fixed it)
 
 ---
 
