@@ -385,6 +385,13 @@ def main_logic():
     # Set up and start the task scheduler
     task_scheduler.schedule_daily_task(lambda: run_backup_with_retry())
 
+    # Immediate health feedback: confirms the service started and the first run is kicked off.
+    show_notification(
+        "Backup Service Started",
+        f"Initial backup is running now. Daily schedule: {config.SCHEDULE_TIME}",
+        "info",
+    )
+
     # Start the initial backup task
     logging.info("🔄 Preparing initial backup")
     initial_backup_thread = threading.Thread(
