@@ -8,15 +8,17 @@ REQUIREMENTS
 
 QUICK START
   Double-click LarkBackup.exe to run the backup service immediately.
-  The program will run silently in the background and stop when you close the process.
+  The program runs silently with no visible window. To stop it, use Task Manager
+  or run LarkBackup.exe --uninstall.
 
 INSTALL AS AUTOSTART SERVICE (recommended)
-  Run in a terminal or double-click:
+  Open a terminal (cmd or PowerShell) in the same folder and run:
     LarkBackup.exe --install
   This registers the program to start automatically at Windows login,
   then launches it immediately. No further action needed.
 
 UNINSTALL
+  In a terminal:
     LarkBackup.exe --uninstall
   Removes the autostart entry and stops the running service.
 
@@ -26,8 +28,7 @@ WHAT IT DOES
   - Downloads the Bitable sheet from Lark and saves it as Excel
   - Backup files:  D:\Case Management Platform Backup\
   - Daily reports: D:\Case Management Platform Backup\Daily_Reports\
-  - Logs:          D:\Case Management Platform Backup\logs\  (when run via --install)
-      or           <exe folder>\logs\                        (when run directly)
+  - Logs:          <exe folder>\logs\LarkBackupLog.log  (always next to the exe)
 
 RETRY BEHAVIOR
   On failure, the program retries up to 5 times per day (once per 60 seconds).
