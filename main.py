@@ -52,7 +52,7 @@ def _cli_install() -> None:
     """Register autostart in HKCU and launch the backup service."""
     if not getattr(sys, "frozen", False):
         _msgbox("Lark Backup", "--install is only available in the packaged exe.", 0x30)
-        sys.exit(1)
+        os._exit(1)
 
     exe = sys.executable  # path to LarkBackup.exe
     try:
@@ -61,7 +61,7 @@ def _cli_install() -> None:
             winreg.SetValueEx(key, _REG_APP_NAME, 0, winreg.REG_SZ, f'"{exe}"')
     except Exception as e:
         _msgbox("Lark Backup — Install Failed", f"Could not register autostart:\n{e}", 0x10)
-        sys.exit(1)
+        os._exit(1)
 
     # Launch the backup service (same exe, no --install flag), fully detached
     subprocess.Popen(
@@ -75,10 +75,14 @@ def _cli_install() -> None:
         "Autostart registered.\n\n"
         "Lark Backup will start automatically on every login.\n"
         "The backup service is now running in the background.\n\n"
-        "To uninstall:  LarkBackup.exe --uninstall",
+        "To uninstall:  disable_autostart.vbs",
         0x40,
     )
-    sys.exit(0)
+    # os._exit skips Python teardown and PyInstaller bootloader cleanup,
+    # preventing a spurious "Failed to remove temporary directory" warning
+    # that appears when DLLs are still mapped at the point sys.exit() returns
+    # control to the bootloader. _MEI temp dir is cleaned up by Windows later.
+    os._exit(0)
 
 
 def _cli_uninstall() -> None:
@@ -93,7 +97,7 @@ def _cli_uninstall() -> None:
         pass  # was never registered — that's fine
     except Exception as e:
         _msgbox("Lark Backup — Uninstall Failed", f"Could not remove autostart:\n{e}", 0x10)
-        sys.exit(1)
+        os._exit(1)
 
     # Terminate other running instances of the same exe
     own_pid = os.getpid()
@@ -113,7 +117,7 @@ def _cli_uninstall() -> None:
         f"{status}\nThe backup service has been stopped.",
         0x40,
     )
-    sys.exit(0)
+    os._exit(0)
 
 
 # ---------------------------------------------------------------------------
