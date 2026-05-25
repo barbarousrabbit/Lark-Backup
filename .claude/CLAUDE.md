@@ -115,6 +115,8 @@ pyinstaller LarkBackup.spec
 # Output: dist/LarkBackup.exe — this is the only file to distribute
 ```
 
+**Distribution zip name is always `LarkBackup.zip` — no date suffix, no version suffix.** Overwrite the existing file each time.
+
 ### Installing / Uninstalling (end-user, packaged exe)
 ```
 LarkBackup.exe --install     # registers HKCU autostart + launches service
@@ -132,6 +134,7 @@ CLI is handled in `main.py::_cli_install()` / `_cli_uninstall()` before logging 
 - **Do not** call `logging.basicConfig()` at the top level of any `core/` module
 - **Do not** use a local variable named `html` inside functions — it conflicts with the stdlib `import html` (historical bug, already fixed)
 - **Do not** add new `init_xxx()` factory functions that return new instances — all core objects must be module-level singletons
+- **Do not** include a date or version in the distribution zip filename — it is always `LarkBackup.zip`
 - **Do not** treat `job_status=2` as a terminal error in `api_service.py::get_export_task_status()` — the Lark export API returns `status=2` transiently on first polls before the file is ready; **`file_token` presence is the sole success condition**; break only on timeout or HTTP error (regression history: commit `dfb9829` introduced this bug, `aba248e` fixed it)
 
 ---
