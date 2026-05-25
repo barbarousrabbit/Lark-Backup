@@ -425,7 +425,11 @@ class ReportGenerator:
                     </tr>'''
 
             content += '</tbody></table>'
-        else:
+        elif not warnings:
+            # Only show success message when there are neither differences nor warnings.
+            # If warnings are present but comparison_result is empty (e.g. previous file missing),
+            # the warning box above already describes the situation — a "no changes" success
+            # message here would contradict it.
             content += '<div class="success-box">✅ No significant changes detected</div>'
 
         return content
