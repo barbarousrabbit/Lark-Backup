@@ -61,7 +61,7 @@ LarkBackup.exe --uninstall   # remove autostart + stop service
 Typical first-time setup:
 
 1. Copy `LarkBackup.exe` to any permanent folder (e.g. `C:\Tools\LarkBackup\`)
-2. Run `LarkBackup.exe --install` — registers autostart, shows a confirmation dialog, and starts the service
+2. Run `LarkBackup.exe --install` — registers autostart and starts the service (a "Backup Service Started" notification confirms it is running)
 3. Done. The service runs silently in the background and backs up every day at the configured time
 
 ### Method 2: Run from Source

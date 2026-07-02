@@ -63,10 +63,15 @@ def _cli_install() -> None:
         _msgbox("Lark Backup — Install Failed", f"Could not register autostart:\n{e}", 0x10)
         os._exit(1)
 
-    # Strip _MEIPASS2 so the service creates its own PyInstaller temp dir
-    # instead of reusing this process's _MEI directory (which gets deleted on exit).
-    env = dict(os.environ)
-    env.pop("_MEIPASS2", None)
+    # The service must launch as an INDEPENDENT onefile instance that extracts
+    # and later cleans up its OWN _MEI temp dir. PyInstaller signals "you are a
+    # nested child, reuse the parent's dir" via sentinel env vars; if the child
+    # inherits them it shares this installer's dir, then loses it (certifi TLS
+    # failure) and blocks its removal ("Failed to remove temporary directory")
+    # when the installer exits. The sentinel was _MEIPASS2 on PyInstaller <=5
+    # and became the _PYI_* family on 6.x, so strip both to stay version-proof.
+    env = {k: v for k, v in os.environ.items()
+           if k != "_MEIPASS2" and not k.startswith("_PYI")}
 
     # Launch the backup service (same exe, no --install flag), fully detached
     subprocess.Popen(
@@ -76,16 +81,10 @@ def _cli_install() -> None:
         close_fds=True,
     )
 
-    # MB_SETFOREGROUND (0x10000) brings the dialog to the front even when
-    # the process was launched hidden (e.g. via VBScript SW_HIDE).
-    _msgbox(
-        "Lark Backup — Installed",
-        "Autostart registered.\n\n"
-        "Lark Backup will start automatically on every login.\n"
-        "The backup service is now running in the background.\n\n"
-        "To uninstall:  disable_autostart.vbs",
-        0x40 | 0x10000,
-    )
+    # No success dialog: the detached service shows its own "Backup Service
+    # Started" toast once it is up, so a center-screen MessageBox here would be
+    # a redundant second popup. Errors above still use MessageBox (they need
+    # attention and the service may never start to toast about them).
     os._exit(0)
 
 
