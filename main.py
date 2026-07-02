@@ -124,14 +124,23 @@ def _cli_uninstall() -> None:
 
         own_pid = os.getpid()
         own_parent_pid = os.getppid()
+        own_name = os.path.basename(os.path.abspath(sys.executable)).lower()
         candidates = []
-        for proc in psutil.process_iter(["pid", "ppid", "exe", "cmdline"]):
+        for proc in psutil.process_iter(["pid", "ppid", "exe", "cmdline", "name"]):
             # Skip ourselves and our own PyInstaller bootloader parent — killing
             # the parent would leak its _MEI temp dir and abort this dialog.
             if proc.pid in (own_pid, own_parent_pid):
                 continue
             try:
-                if (proc.info.get("exe") or "").lower() not in target_paths:
+                exe = (proc.info.get("exe") or "").lower()
+                if exe:
+                    if exe not in target_paths:
+                        continue
+                # exe unreadable (e.g. a service launched elevated) — fall back
+                # to the process name so an inaccessible instance is still
+                # detected instead of silently dropped (would else falsely
+                # report "service stopped").
+                elif (proc.info.get("name") or "").lower() != own_name:
                     continue
                 cmdline = proc.info.get("cmdline") or []
                 if "--install" in cmdline or "--uninstall" in cmdline:

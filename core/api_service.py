@@ -177,7 +177,11 @@ class APIService:
                 if response.status_code == 200:
                     response_data = response.json()
 
-                    result = response_data.get('data', {}).get('result', {})
+                    # Guard against a null 'data'/'result' (HTTP 200 with a
+                    # logical error, e.g. expired ticket): .get(k, {}) keeps a
+                    # present-but-None value, so coerce with `or {}` to avoid
+                    # an AttributeError escaping the poll loop.
+                    result = (response_data.get('data') or {}).get('result') or {}
                     job_status = result.get("job_status")
                     file_token = result.get("file_token")
 

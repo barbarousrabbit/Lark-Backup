@@ -4,6 +4,7 @@ Used to compare backup data from different dates and detect data changes
 """
 
 import os
+import glob
 import json
 import logging
 from collections import Counter
@@ -30,7 +31,14 @@ class DataComparator:
 
     def get_backup_file_path(self, date_str: str) -> str:
         """
-        Get the backup file path for a given date
+        Resolve a date to its backup file.
+
+        Prefers the canonical name, but file_manager falls back to a
+        timestamped name ("... {date}_HHMMSS.xlsx") or the program-dir
+        "backup" folder when the canonical path is locked/unwritable. Return
+        whichever real file exists (newest timestamped match) so comparison
+        and data-loss detection keep working after a fallback save. When none
+        exists, return the canonical path so file_exists() reports missing.
 
         Args:
             date_str: Date string in YYYY-MM-DD format
@@ -39,7 +47,24 @@ class DataComparator:
             File path
         """
         filename = config.BACKUP_FILENAME_TEMPLATE.format(date=date_str)
-        return os.path.join(self.backup_dir, filename)
+        canonical = os.path.join(self.backup_dir, filename)
+        if os.path.exists(canonical):
+            return canonical
+
+        base, ext = os.path.splitext(filename)
+        pattern = f"{base}_*{ext}"
+        matches = []
+        for search_dir in (self.backup_dir, os.path.join(config.get_program_dir(), "backup")):
+            try:
+                matches.extend(glob.glob(os.path.join(search_dir, pattern)))
+            except OSError:
+                continue
+        if matches:
+            try:
+                return max(matches, key=os.path.getmtime)
+            except OSError:
+                return matches[0]
+        return canonical
 
     def file_exists(self, date_str: str) -> bool:
         """
