@@ -16,7 +16,14 @@ class FileManager:
     def __init__(self):
         """Initialize the file manager"""
         self.download_dir = config.DOWNLOAD_DIR
-        self.ensure_download_dir_exists()
+        # Non-fatal here: this runs at import time (module-level singleton),
+        # before logging is configured — raising would kill the windowed exe
+        # before any log/report exists. _download_and_save() re-checks at
+        # backup time and routes failures into the normal error report.
+        try:
+            self.ensure_download_dir_exists()
+        except Exception as e:
+            logging.warning(f"⚠️ Download dir unavailable at startup ({e}); will retry at backup time")
 
     def ensure_download_dir_exists(self):
         """Ensure the download directory exists"""
@@ -30,6 +37,22 @@ class FileManager:
             logging.error(f"❌ Cannot create dir {self.download_dir}: {e}")
             raise
 
+    def _write_atomic(self, file_path, file_content):
+        """Write via a temp file + os.replace so a mid-write kill can never
+        leave a truncated xlsx at the final name."""
+        tmp_path = file_path + '.tmp'
+        try:
+            with open(tmp_path, 'wb') as f:
+                f.write(file_content)
+            os.replace(tmp_path, file_path)
+        except Exception:
+            try:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except OSError:
+                pass
+            raise
+
     def save_file(self, file_content, date_str):
         """Save a file to the local filesystem (overwrite existing file when possible)"""
         filename = config.BACKUP_FILENAME_TEMPLATE.format(date=date_str)
@@ -37,8 +60,7 @@ class FileManager:
 
         # Attempt a direct overwrite first
         try:
-            with open(file_path, 'wb') as f:
-                f.write(file_content)
+            self._write_atomic(file_path, file_content)
 
             logging.info(f"✅ Saved: {file_path}")
             logging.info(f"📝 File updated: {filename}")
@@ -64,8 +86,7 @@ class FileManager:
                 os.remove(original_path)
                 logging.info(f"🗑️ Deleted, writing new")
 
-                with open(original_path, 'wb') as f:
-                    f.write(file_content)
+                self._write_atomic(original_path, file_content)
 
                 logging.info(f"✅ Overwrite success: {original_path}")
                 return original_path
@@ -82,8 +103,7 @@ class FileManager:
         timestamped_path = os.path.join(self.download_dir, filename)
 
         try:
-            with open(timestamped_path, 'wb') as f:
-                f.write(file_content)
+            self._write_atomic(timestamped_path, file_content)
 
             logging.info(f"✅ Timestamp save: {timestamped_path}")
             logging.warning(f"⚠️ Saved as: {filename}")
@@ -109,8 +129,7 @@ class FileManager:
             filename = f"{base}_{timestamp}{ext}"
             fallback_path = os.path.join(fallback_dir, filename)
 
-            with open(fallback_path, 'wb') as f:
-                f.write(file_content)
+            self._write_atomic(fallback_path, file_content)
 
             logging.info(f"✅ Saved to backup: {fallback_path}")
             logging.warning(f"⚠️ Saved to backup folder")

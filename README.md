@@ -16,7 +16,7 @@ A Python-based Windows tool that automatically backs up Lark (Feishu) Bitable sh
 - **Data comparison**: Compares backup data across dates to detect changes and deletions
 - **Data loss alerts**: Sends an error notification when more than 50 rows are deleted from any sheet
 - **Daily reports**: Generates detailed HTML and JSON reports saved in the `Daily_Reports` folder
-- **Smart notifications**: Uses win10toast with distinct success/warning/error notification types
+- **Smart notifications**: Uses windows-toasts (WinRT) with distinct success/warning/error notification types
 
 ## File Structure
 
@@ -39,7 +39,9 @@ LarkBackup/
 │   ├── notification.py     # Notification module
 │   ├── scheduler.py        # Task scheduler
 │   ├── data_comparator.py  # Data comparison module
-│   └── alert_window.py     # Data loss alert notifications
+│   ├── alert_window.py     # Data loss alert notifications
+│   ├── retry_manager.py    # Daily retry counting
+│   └── report_generator.py # HTML + JSON daily reports
 │
 ├── main.py                 # Program entry point
 ├── requirements.txt        # Dependency list
@@ -83,7 +85,7 @@ APP_SECRET = "your_app_secret_here"  # Lark bot App Secret
 TOKEN = "your_wiki_token_here"     # Lark Wiki node token
 
 # Schedule configuration
-SCHEDULE_TIME = "01:00"  # Daily scheduled task time, format: HH:MM
+SCHEDULE_TIME = "09:00"  # Daily scheduled task time, format: HH:MM
 ```
 
 ## Building a Distribution Package

@@ -24,14 +24,20 @@ class NetworkMonitor:
     """Network monitor: detects connectivity and blocks until recovery."""
 
     def check_connection(self) -> bool:
-        """Attempt to connect to configured check hosts; return True if any succeeds."""
+        """Return True only if ALL configured check hosts are reachable.
+
+        The list holds exactly the API domains a backup depends on, so a
+        partial outage counts as "down" — otherwise attempts would fail fast
+        against the unreachable domain and burn the daily retry quota that
+        wait_for_recovery() is designed to protect.
+        """
         for host, port in config.NETWORK_CHECK_HOSTS:
             try:
                 with socket.create_connection((host, port), timeout=config.NETWORK_CHECK_TIMEOUT):
-                    return True
+                    pass
             except OSError:
-                continue
-        return False
+                return False
+        return True
 
     def wait_for_recovery(self) -> bool:
         """

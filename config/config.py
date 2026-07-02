@@ -41,9 +41,14 @@ if DEBUG_MODE:
     SCHEDULE_TIME = test_time
 
 # Network configuration
+# Both API domains must be reachable for a backup to succeed: auth lives on
+# open.feishu.cn, all data APIs on open.larksuite.com. check_connection()
+# requires ALL hosts listed here (see core/network.py), so a partial outage
+# (e.g. larksuite blocked while feishu is fine) counts as "network down" and
+# waits for recovery instead of burning the daily retry quota.
 NETWORK_CHECK_HOSTS = [
-    ("open.feishu.cn", 443),  # Primary: check Feishu server
-    ("www.baidu.com", 443)    # Fallback check
+    ("open.larksuite.com", 443),  # data APIs: wiki / export / download
+    ("open.feishu.cn", 443),      # auth API (tenant_access_token)
 ]
 NETWORK_CHECK_TIMEOUT = 3  # Network connection check timeout (seconds)
 NETWORK_RETRY_INITIAL_INTERVAL = 30  # Initial retry interval after network loss (seconds)

@@ -92,6 +92,18 @@ def _cli_install() -> None:
 def _cli_uninstall() -> None:
     """Remove autostart from HKCU and stop any running instance."""
     removed = False
+
+    # Read the registered exe path BEFORE deleting the value, so a service
+    # running from a different folder (old install dir) can still be stopped.
+    installed_exe = None
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _REG_RUN_PATH, 0,
+                            winreg.KEY_QUERY_VALUE) as key:
+            value, _ = winreg.QueryValueEx(key, _REG_APP_NAME)
+            installed_exe = value.strip().strip('"')
+    except OSError:
+        pass  # not registered or unreadable — matching falls back to own exe
+
     try:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _REG_RUN_PATH, 0,
                             winreg.KEY_SET_VALUE) as key:
@@ -103,24 +115,63 @@ def _cli_uninstall() -> None:
         _msgbox("Lark Backup — Uninstall Failed", f"Could not remove autostart:\n{e}", 0x10)
         os._exit(1)
 
-    # Terminate other running instances of the same exe
-    own_pid = os.getpid()
-    own_exe = os.path.abspath(sys.executable).lower()
-    for proc in psutil.process_iter(["pid", "exe"]):
-        if proc.pid == own_pid:
-            continue
-        try:
-            if (proc.info.get("exe") or "").lower() == own_exe:
+    # Terminate running instances. Frozen-only: in dev mode sys.executable is
+    # python.exe and a path sweep would kill unrelated Python processes.
+    still_alive = []
+    if getattr(sys, "frozen", False):
+        target_paths = {os.path.abspath(sys.executable).lower()}
+        if installed_exe:
+            target_paths.add(os.path.abspath(installed_exe).lower())
+
+        own_pid = os.getpid()
+        own_parent_pid = os.getppid()
+        candidates = []
+        for proc in psutil.process_iter(["pid", "ppid", "exe", "cmdline"]):
+            # Skip ourselves and our own PyInstaller bootloader parent — killing
+            # the parent would leak its _MEI temp dir and abort this dialog.
+            if proc.pid in (own_pid, own_parent_pid):
+                continue
+            try:
+                if (proc.info.get("exe") or "").lower() not in target_paths:
+                    continue
+                cmdline = proc.info.get("cmdline") or []
+                if "--install" in cmdline or "--uninstall" in cmdline:
+                    continue
+                candidates.append(proc)
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+
+        # Onefile pairs: terminate only app children; a bootloader parent
+        # cleans up its _MEI temp dir and exits once its child dies.
+        bootloader_pids = {c.info.get("ppid") for c in candidates}
+        targets = [c for c in candidates if c.pid not in bootloader_pids]
+        for proc in targets:
+            try:
                 proc.terminate()
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            pass
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+        _, alive = psutil.wait_procs(targets, timeout=5)
+        for proc in alive:
+            try:
+                proc.kill()
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+        _, still_alive = psutil.wait_procs(alive, timeout=3)
 
     status = "Autostart removed." if removed else "Autostart was not registered."
-    _msgbox(
-        "Lark Backup — Uninstalled",
-        f"{status}\nThe backup service has been stopped.",
-        0x40,
-    )
+    if still_alive:
+        _msgbox(
+            "Lark Backup — Uninstalled (with warnings)",
+            f"{status}\n{len(still_alive)} LarkBackup process(es) could not be stopped — "
+            "please end them via Task Manager.",
+            0x30,
+        )
+    else:
+        _msgbox(
+            "Lark Backup — Uninstalled",
+            f"{status}\nThe backup service has been stopped.",
+            0x40,
+        )
     os._exit(0)
 
 
@@ -181,17 +232,24 @@ def setup_logging():
 
 # Configure console encoding
 def setup_console_encoding():
-    """Configure console encoding"""
+    """Configure console encoding (dev console runs only)."""
+    # Windowed exe: there is no console, and os.system() would spawn cmd.exe
+    # with a visible window flash at every startup/login. Skip entirely.
+    if getattr(sys, 'frozen', False) or sys.stdout is None:
+        return
     if sys.platform.startswith('win'):
         try:
             os.system('chcp 65001 > nul')
-        except:
+        except Exception:
             pass
 
 
 def _download_and_save(backup_date):
     """Runs the full API pipeline and saves the file. Returns (path, details) or (None, details)."""
-    details = {'backup_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'attempts': 1}
+    # Real attempt number: get_today_attempts()+1 because record_attempt()
+    # only runs after the whole backup_task returns.
+    details = {'backup_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+               'attempts': retry_manager.get_today_attempts() + 1}
     try:
         file_manager.ensure_download_dir_exists()
         tenant_token = api_service.get_tenant_token()
@@ -243,18 +301,20 @@ def _download_and_save(backup_date):
 
 
 def _compare_and_alert(backup_date):
-    """Runs data comparison. Returns (differences, warnings)."""
+    """Runs data comparison. Returns (differences, warnings).
+    Alert notifications are fired by the caller AFTER the success toast."""
     try:
         differences, warnings = data_comparator.compare_with_previous_date(backup_date)
         if warnings:
             logging.warning(f"⚠️ {len(warnings)} warnings from comparison")
-            alert_manager.check_and_show_alert(differences, warnings, backup_date)
         if differences:
             data_comparator.save_comparison_result(backup_date, {'differences': differences, 'warnings': warnings})
         return differences, warnings
     except Exception as e:
         logging.error(f"❌ Comparison failed: {e}")
-        return None, []
+        # Surface the failure in the daily report as a warning instead of
+        # letting it render the green "No significant changes" success box.
+        return None, [f"Data comparison failed: {e}"]
 
 
 def _generate_failure_report(backup_date, error_msg, attempts=1):
@@ -276,9 +336,8 @@ def backup_task(backup_date=None):
     saved_path, details = _download_and_save(backup_date)
 
     if not saved_path:
-        # attempt_count is get_today_attempts()+1 because record_attempt() runs after this returns
         _generate_failure_report(backup_date, details.get('error', 'unknown'),
-                                 retry_manager.get_today_attempts() + 1)
+                                 details.get('attempts', 1))
         return False
 
     logging.info(f"✅ Backup saved: {saved_path}")
@@ -292,19 +351,14 @@ def backup_task(backup_date=None):
 
     # Show backup success first so the user knows the backup itself succeeded,
     # then follow with the comparison detail as supplementary information.
+    # (alert_manager fires HERE, not inside _compare_and_alert, so this order
+    # is guaranteed and a data-loss day produces exactly two toasts.)
     show_notification("Backup Successful", f"Saved: {os.path.basename(saved_path)}", "success")
 
     if warnings and differences:
-        # Real data-loss warnings with actual sheet differences — show alert
-        n_sheets = len(differences)
-        n_warn = len(warnings)
-        sheet_label = "sheet" if n_sheets == 1 else "sheets"
-        warn_label = "warning" if n_warn == 1 else "warnings"
-        show_notification(
-            "Data Comparison Alert",
-            f"{n_sheets} {sheet_label} changed, {n_warn} {warn_label}",
-            "warning"
-        )
+        # Real data-loss warnings with actual sheet differences — one
+        # per-day-deduplicated Data Loss Alert via alert_manager.
+        alert_manager.check_and_show_alert(differences, warnings, backup_date)
     elif differences:
         # Changes detected but no warnings (no data loss threshold exceeded)
         n_sheets = len(differences)
@@ -337,13 +391,19 @@ def run_backup_with_retry():
 def _run_backup_loop():
     """Backup retry loop (internal implementation, called under lock by run_backup_with_retry)."""
     backup_date = config.get_backup_date()
+    # In-memory backstop: if daily_retry_count.json is unwritable, the
+    # persisted count never grows and the file-based limit alone would let
+    # this loop retry forever (hammering the Lark API every ~60s).
+    local_attempts = 0
 
     while True:
-        if not retry_manager.can_attempt_today():
+        if local_attempts >= config.MAX_DAILY_ATTEMPTS or not retry_manager.can_attempt_today():
             logging.warning(f"⚠️ Daily limit reached ({config.MAX_DAILY_ATTEMPTS} attempts)")
             show_notification("Daily Limit Reached", "All backup attempts exhausted for today", "error")
+            # max(): the persisted count may read 0 when the retry file is
+            # unwritable — the in-memory counter still knows what happened.
             _generate_failure_report(backup_date, f"All {config.MAX_DAILY_ATTEMPTS} attempts failed",
-                                     retry_manager.get_today_attempts())
+                                     max(retry_manager.get_today_attempts(), local_attempts))
             return False
 
         # Pre-check network BEFORE counting an attempt against the daily limit.
@@ -353,12 +413,14 @@ def _run_backup_loop():
             network_monitor.wait_for_recovery()
 
         result = backup_task(backup_date)
+        local_attempts += 1
         attempt_count = retry_manager.record_attempt(success=result)
 
         if result:
             return True
 
-        remaining = retry_manager.get_remaining_attempts()
+        remaining = min(retry_manager.get_remaining_attempts(),
+                        config.MAX_DAILY_ATTEMPTS - local_attempts)
         if remaining <= 0:
             logging.error(f"❌ Daily attempts exhausted ({config.MAX_DAILY_ATTEMPTS} times)")
             show_notification("Backup Failed", f"All {config.MAX_DAILY_ATTEMPTS} attempts failed today", "error")

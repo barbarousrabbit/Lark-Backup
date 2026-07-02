@@ -86,6 +86,17 @@ class SingleInstanceManager:
             if final_err == ERROR_ALREADY_EXISTS:
                 ctypes.windll.kernel32.CloseHandle(handle2)
                 logging.error("❌ Cannot acquire single-instance mutex — old process still running. Exiting.")
+                # Windowed exe: without this dialog the user gets zero feedback
+                # that the new copy refused to start (e.g. old instance elevated
+                # or running from another folder).
+                ctypes.windll.user32.MessageBoxW(
+                    None,
+                    "Another copy of Lark Backup is already running and could not be stopped.\n"
+                    "The existing service keeps running; this new instance will exit.\n\n"
+                    "To replace it, end LarkBackup.exe in Task Manager and start again.",
+                    "Lark Backup — Already Running",
+                    0x10 | 0x10000,  # MB_ICONERROR | MB_SETFOREGROUND
+                )
                 sys.exit(1)
             self._mutex_handle = handle2
             atexit.register(self.cleanup)
@@ -115,30 +126,65 @@ class SingleInstanceManager:
     def _kill_existing_instance(self):
         """Find and terminate the existing instance by exe path or script path."""
         if getattr(sys, 'frozen', False):
-            own_exe = os.path.abspath(sys.executable).lower()
+            # PyInstaller onefile: every running instance is TWO processes with
+            # the SAME exe path — the bootloader parent and the app child that
+            # runs this Python code. Only app children can own the mutex, and a
+            # bootloader cleans up its _MEI temp dir and exits by itself once
+            # its child dies. A bare exe-path sweep must therefore never touch
+            # our own bootloader parent (killing it TerminateProcess-es US via
+            # the children-first pass in _terminate) nor other bootloaders.
+            candidates = self._find_frozen_instances(match_basename=False)
+            if not candidates:
+                # Upgrade case: the running copy may live at a different path
+                # (new zip extracted elsewhere) — fall back to matching by name.
+                candidates = self._find_frozen_instances(match_basename=True)
 
-            def is_target(proc):
-                exe = (proc.info.get('exe') or '').lower()
-                return exe == own_exe
+            bootloader_pids = {c.info.get('ppid') for c in candidates}
+            for proc in candidates:
+                if proc.pid in bootloader_pids:
+                    continue  # bootloader parent of another candidate — leave it
+                self._terminate(proc)
         else:
             own_script = os.path.abspath(sys.argv[0]).lower()
+            for proc in psutil.process_iter(['pid', 'exe', 'cmdline']):
+                if proc.pid == self.own_pid:
+                    continue
+                try:
+                    cmdline = proc.info.get('cmdline') or []
+                    if (len(cmdline) >= 2
+                            and 'python' in (cmdline[0] or '').lower()
+                            and os.path.abspath(cmdline[-1]).lower() == own_script):
+                        self._terminate(proc)
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
 
-            def is_target(proc):
-                cmdline = proc.info.get('cmdline') or []
-                return (
-                    len(cmdline) >= 2
-                    and 'python' in (cmdline[0] or '').lower()
-                    and os.path.abspath(cmdline[-1]).lower() == own_script
-                )
+    def _find_frozen_instances(self, match_basename):
+        """Snapshot other LarkBackup processes (frozen mode only).
 
-        for proc in psutil.process_iter(['pid', 'exe', 'cmdline']):
-            if proc.pid == self.own_pid:
+        Excludes this process, its own bootloader parent, and --install /
+        --uninstall helper runs (they never hold the mutex).
+        """
+        own_exe = os.path.abspath(sys.executable).lower()
+        own_name = os.path.basename(own_exe)
+        own_parent_pid = os.getppid()
+        candidates = []
+        for proc in psutil.process_iter(['pid', 'ppid', 'exe', 'cmdline']):
+            if proc.pid in (self.own_pid, own_parent_pid):
                 continue
             try:
-                if is_target(proc):
-                    self._terminate(proc)
+                exe = (proc.info.get('exe') or '').lower()
+                if match_basename:
+                    if os.path.basename(exe) != own_name:
+                        continue
+                elif exe != own_exe:
+                    continue
+                cmdline = proc.info.get('cmdline') or []
+                if '--install' in cmdline or '--uninstall' in cmdline:
+                    continue
+                candidates.append(proc)
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
+        return candidates
 
     def _terminate(self, proc):
         """Terminate a process tree: children first, then parent."""

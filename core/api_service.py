@@ -90,8 +90,16 @@ class APIService:
             response = requests.get(url, headers=headers, timeout=30)
 
             if response.status_code == 200:
+                response_data = response.json()
+                # Lark returns most logical errors as HTTP 200 + code != 0 —
+                # surface the real msg instead of failing later on missing keys
+                if response_data.get("code") != 0:
+                    error_msg = (f"Wiki API error code {response_data.get('code')}: "
+                                 f"{response_data.get('msg', 'Unknown error')}")
+                    logging.error(f"❌ {error_msg}")
+                    raise LarkAPIError(error_msg, response=response_data)
                 logging.info("✅ Wiki data acquired")
-                return response.json()
+                return response_data
             else:
                 error_msg = f"Wiki API request failed, status code: {response.status_code}"
                 logging.error(f"❌ {error_msg}")
@@ -126,7 +134,12 @@ class APIService:
 
             if response.status_code == 200:
                 response_data = response.json()
-                ticket = response_data.get("data", {}).get("ticket")
+                # Lark returns most logical errors as HTTP 200 + code != 0
+                if response_data.get("code") != 0:
+                    logging.error(f"❌ Export task API error code {response_data.get('code')}: "
+                                  f"{response_data.get('msg', 'Unknown error')}")
+                    return None
+                ticket = (response_data.get("data") or {}).get("ticket")
 
                 if ticket and ticket.strip():
                     logging.info("✅ Export task created")
@@ -143,7 +156,9 @@ class APIService:
             logging.error(f"❌ Network exception when creating export task: {e}")
             return None
 
-    @with_network_retry
+    # No @with_network_retry here: by poll time the export task is already
+    # running server-side, so a blip at call moment should ride out the poll
+    # budget instead of instantly failing the whole daily attempt.
     def get_export_task_status(self, ticket, obj_token):
         """Query export task status and retrieve the file_token"""
         if not ticket:
@@ -151,21 +166,20 @@ class APIService:
             return None
 
         url = config.get_export_task_status_url(ticket, obj_token)
-        headers = self.get_authorization_header()
 
-        try:
-            for attempt in range(config.MAX_EXPORT_STATUS_CHECKS):
+        for attempt in range(config.MAX_EXPORT_STATUS_CHECKS):
+            try:
+                # Header rebuilt every poll: cheap on cache hit, and the token
+                # auto-refreshes if its cached expiry passes mid-poll.
+                headers = self.get_authorization_header()
                 response = requests.get(url, headers=headers, timeout=30)
 
                 if response.status_code == 200:
                     response_data = response.json()
-                    # API response details removed
 
                     result = response_data.get('data', {}).get('result', {})
                     job_status = result.get("job_status")
                     file_token = result.get("file_token")
-
-                    # Status details removed
 
                     if file_token and file_token.strip():
                         logging.info("✅ Export ready")
@@ -179,15 +193,18 @@ class APIService:
                 else:
                     logging.error(f"❌ Failed to get task status, status code: {response.status_code}")
 
-                # Use the configurable check interval
-                time.sleep(config.EXPORT_STATUS_CHECK_INTERVAL)
+            except (requests.RequestException, LarkAPIError, ValueError) as e:
+                # A transient blip must not abort the poll: the export keeps
+                # completing server-side and the attempt budget bounds total
+                # time. (Covers connection errors, a failed token refresh,
+                # and JSON decode errors on captive-portal/proxy responses.)
+                logging.warning(f"⚠️ Poll attempt {attempt + 1}/{config.MAX_EXPORT_STATUS_CHECKS} failed: {e} — retrying")
 
-            logging.error("❌ Timeout waiting for file_token")
-            return None
+            # Use the configurable check interval
+            time.sleep(config.EXPORT_STATUS_CHECK_INTERVAL)
 
-        except requests.RequestException as e:
-            logging.error(f"❌ Network exception when getting export task status: {e}")
-            return None
+        logging.error("❌ Timeout waiting for file_token")
+        return None
 
     @with_network_retry
     def download_file(self, file_token):

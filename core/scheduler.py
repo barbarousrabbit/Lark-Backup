@@ -97,8 +97,13 @@ class TaskScheduler:
 
         # Use dynamic sleep time to optimise CPU usage
         while not self.stop_event.is_set():
-            # Run any pending tasks
-            schedule.run_pending()
+            # Run any pending tasks. The guard is this thread's last line of
+            # defense: an exception escaping a job would otherwise kill the
+            # scheduler thread permanently and silently stop all daily backups.
+            try:
+                schedule.run_pending()
+            except Exception as e:
+                logging.error(f"❌ Scheduled job raised unexpectedly: {e}", exc_info=True)
 
             # Calculate time until the next task
             next_run = self._calculate_next_run_seconds()
