@@ -204,8 +204,10 @@ class APIService:
                 # and JSON decode errors on captive-portal/proxy responses.)
                 logging.warning(f"⚠️ Poll attempt {attempt + 1}/{config.MAX_EXPORT_STATUS_CHECKS} failed: {e} — retrying")
 
-            # Use the configurable check interval
-            time.sleep(config.EXPORT_STATUS_CHECK_INTERVAL)
+            # Sleep between polls only — after the final attempt, fall
+            # through to the timeout error immediately.
+            if attempt + 1 < config.MAX_EXPORT_STATUS_CHECKS:
+                time.sleep(config.EXPORT_STATUS_CHECK_INTERVAL)
 
         logging.error("❌ Timeout waiting for file_token")
         return None

@@ -286,6 +286,15 @@ def _download_and_save(backup_date):
             logging.error("❌ Download failed")
             details['error'] = 'download failed'
             return None, details
+        # Label the snapshot by its CAPTURE time, not the attempt start: an
+        # attempt that resumes after a multi-day system sleep would otherwise
+        # file today's data under a days-old name (observed 2026-06: Monday
+        # data saved as the Friday file after a weekend sleep).
+        effective_date = config.get_backup_date()
+        if effective_date != backup_date:
+            logging.warning(f"⚠️ Date drifted during backup ({backup_date} → {effective_date}); labeling snapshot as {effective_date}")
+            backup_date = effective_date
+        details['date'] = backup_date
         saved_path = file_manager.save_file(file_content, backup_date)
         if saved_path:
             details['file_path'] = saved_path
@@ -350,6 +359,10 @@ def backup_task(backup_date=None):
 
     logging.info(f"✅ Backup saved: {saved_path}")
 
+    # Follow the save-time label so comparison, report, and alert all refer
+    # to the file that was actually written.
+    backup_date = details.get('date', backup_date)
+
     differences, warnings = _compare_and_alert(backup_date)
 
     try:
@@ -379,6 +392,9 @@ def backup_task(backup_date=None):
     # If warnings but no differences (e.g. previous backup file missing):
     # comparison could not run — already logged, no misleading toast needed
 
+    # Prune old backups only after a fully successful cycle (never raises)
+    file_manager.cleanup_old_backups()
+
     return True
 
 
@@ -398,13 +414,17 @@ def run_backup_with_retry():
 
 def _run_backup_loop():
     """Backup retry loop (internal implementation, called under lock by run_backup_with_retry)."""
-    backup_date = config.get_backup_date()
     # In-memory backstop: if daily_retry_count.json is unwritable, the
     # persisted count never grows and the file-based limit alone would let
     # this loop retry forever (hammering the Lark API every ~60s).
     local_attempts = 0
 
     while True:
+        # Recomputed every attempt: a retry that crosses midnight or resumes
+        # after a system sleep must label the NEW snapshot it takes, not the
+        # day the loop started. (Drift WITHIN one attempt is handled by the
+        # save-time re-check in _download_and_save.)
+        backup_date = config.get_backup_date()
         if local_attempts >= config.MAX_DAILY_ATTEMPTS or not retry_manager.can_attempt_today():
             logging.warning(f"⚠️ Daily limit reached ({config.MAX_DAILY_ATTEMPTS} attempts)")
             show_notification("Daily Limit Reached", "All backup attempts exhausted for today", "error")
@@ -442,7 +462,19 @@ def _run_backup_loop():
 def _run_initial_backup_task():
     """Run the initial backup task in a separate thread (with retry)"""
     logging.info("🚀 Initial backup started")
-    run_backup_with_retry()
+    try:
+        run_backup_with_retry()
+    except Exception as e:
+        # Windowed exe: an exception escaping this thread would only reach
+        # the invisible stderr — log it and surface a failure report so a
+        # lost startup backup is never silent.
+        logging.error(f"❌ Initial backup thread crashed: {e}", exc_info=True)
+        try:
+            _generate_failure_report(config.get_backup_date(), f"initial backup crashed: {e}")
+            show_notification("Backup Error", "Initial backup crashed — see log for details", "error")
+        except Exception:
+            pass
+        return
     logging.info("✅ Initial backup completed")
 
 def main_logic():

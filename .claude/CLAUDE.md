@@ -33,7 +33,7 @@ main.py                    # Entry point: logging init → singleton check → s
 
 ### 3. Retry Control — Single Entry Point `run_backup_with_retry()`
 - `run_backup_with_retry()` acquires `_backup_lock` then delegates to `_run_backup_loop()` — the while loop and all retry logic lives in `_run_backup_loop()`
-- `backup_date` is computed **once** at the top of `_run_backup_loop()` and passed as a parameter to `backup_task(backup_date)` — prevents midnight drift across retries
+- `backup_date` is recomputed at the top of **each** retry iteration in `_run_backup_loop()`, and `_download_and_save()` re-derives it once more right before saving — a snapshot is always labeled by its capture date. Rationale: an attempt that resumed after a multi-day system sleep used to file Monday's data under the Friday name (observed 2026-06); per-attempt recomputation fixes between-attempt drift, the save-time check fixes mid-attempt drift. **Do not revert to computing it once per loop**
 - Network recovery waiting is serial-blocking via `network_monitor.wait_for_recovery()` — **no background threads**
 - The `@with_network_retry` decorator only performs a pre-call network check; returns None if offline — registers no callbacks
 
@@ -59,8 +59,13 @@ config.BACKUP_FILENAME_TEMPLATE = "Case Management Platform {date}.xlsx"
 ```
 Both `file_manager.py` and `data_comparator.py` derive their paths via `.format(date=date_str)`. **Do not hardcode filenames anywhere in the code.**
 
-### 6. Data Comparison — Counter, Not set
-`data_comparator.py::get_data_rows_counter()` returns a `collections.Counter` (multiset); comparison uses Counter subtraction. **Do not revert to set** — sets silently drop additions/deletions of duplicate rows.
+### 6. Data Comparison — Counter + reset_dimensions, Not set
+`data_comparator.py::get_all_sheet_counters()` builds one `collections.Counter` (multiset) per sheet in a single streaming pass; comparison uses Counter subtraction. **Do not revert to set** — sets silently drop additions/deletions of duplicate rows.
+
+Two hard rules learned from a silent total failure (comparison was dead from inception until fixed on 2026-07-03):
+- **`sheet.reset_dimensions()` is mandatory** before iterating a read-only sheet — Lark's exporter writes a bogus `<dimension ref="A1"/>` on every sheet, and openpyxl read-only mode trusts it, yielding ZERO rows.
+- **Never break early on a blank row** — real exports contain interior blank rows (e.g. a sheet whose row 2 is empty with 265 data rows below); every row must be scanned.
+- If a backup file cannot be read, the comparison must ABORT with a warning — degrading to an empty Counter would count every row of the other file as deleted and fire a false data-loss alert.
 
 ### 7. API Credentials Stored in Plaintext (Known Risk, Accepted)
 APP_ID / APP_SECRET / TOKEN are hardcoded in plaintext in `config.py` to support zero-configuration single-exe distribution. **Do not introduce runtime environment variable reading** — it breaks the exe user experience.
@@ -102,8 +107,15 @@ APP_ID / APP_SECRET / TOKEN are hardcoded in plaintext in `config.py` to support
 ### Changing Notification Content
 Edit the callers of `core/notification.py::show_notification(title, message, type)`. Valid types: `"success"` / `"warning"` / `"error"` / `"info"`
 
-### Changing the Alert Threshold (How Many Rows Deleted Before Alert Notification)
-`config.py::ALERT_DELETED_ROW_THRESHOLD = 50` — single source; referenced by both `data_comparator.py` and `alert_window.py`
+### Changing the Alert Threshold (Net Row Loss Before Alert Notification)
+`config.py::ALERT_DELETED_ROW_THRESHOLD = 50` — single source; referenced by both `data_comparator.py` (warnings) and `alert_window.py` (toast filter). The alert fires when a sheet's row count NET-declines by more than this vs the previous day. **Do not alert on Counter-level `deleted_count`** — volatile computed columns (e.g. day counters) rewrite thousands of rows daily, so Counter-deleted ≈ "rows modified" and alerting on it fires every day (observed 2026-07-03: 26k "deleted" rows that were all modifications).
+
+### Changing Backup Retention
+Three constants in `config.py`, applied by `file_manager.cleanup_old_backups()` after each successful backup (age = the filename `{date}` token, not mtime):
+- `RETENTION_DAILY_DAYS = 30` — newer than this: keep every backup
+- `RETENTION_WEEKLY_DAYS = 180` — keep the earliest backup of each ISO week (Monday when present)
+- `RETENTION_MONTHLY_DAYS = 730` — keep the earliest backup of each month; older files are deleted
+Only files matching `BACKUP_FILENAME_TEMPLATE` (canonical or `_HHMMSS` fallback) are ever touched.
 
 ### Changing the Daily Schedule Time
 `config.py::SCHEDULE_TIME = "09:00"` (requires restart after change)
@@ -143,6 +155,7 @@ CLI is handled in `main.py::_cli_install()` / `_cli_uninstall()` before logging 
 - **Do not** add new `init_xxx()` factory functions that return new instances — all core objects must be module-level singletons
 - **Do not** include a date or version in the distribution zip filename — it is always `LarkBackup.zip`
 - **Do not** treat `job_status=2` as a terminal error in `api_service.py::get_export_task_status()` — the Lark export API returns `status=2` transiently on first polls before the file is ready; **`file_token` presence is the sole success condition**; break only on timeout or HTTP error (regression history: commit `dfb9829` introduced this bug, `aba248e` fixed it)
+- **Do not** remove `sheet.reset_dimensions()` or reintroduce break-on-first-blank-row scanning in `data_comparator.py` — Lark xlsx declares a bogus `<dimension ref="A1"/>` and contains interior blank rows; either change silently kills the entire comparison/alert feature again (regression history: dead from inception until 2026-07-03 because of exactly this)
 
 ---
 
@@ -152,9 +165,9 @@ CLI is handled in `main.py::_cli_install()` / `_cli_uninstall()` before logging 
 |---|---|---|
 | No automated tests | Pending | Key scenarios: network interruption recovery, duplicate-row comparison, dual-instance contention |
 | `_is_scheduled_time()` time-window check | Acceptable | 5-minute window distinguishes manual vs. scheduled start; cross-midnight bug already fixed |
-| No cleanup mechanism for report directory | Pending | Daily_Reports/ and JSON reports have no automatic expiration/deletion |
+| No cleanup for Daily_Reports/ | Acceptable | ~10 KB/day, negligible; backup xlsx retention IS implemented (see Common Tasks → Changing Backup Retention) |
 | `AUTH_URL` uses `open.feishu.cn`, all other API URLs use `open.larksuite.com` | Acceptable | Cross-domain token works in practice (Feishu/Lark share backend); verified end-to-end. Make consistent if API failures appear |
-| `count_data_rows()` breaks on first empty row | Acceptable | Assumes contiguous data (valid for Lark-exported xlsx); sparse sheets would under-count rows |
+| Comparison takes ~7 min on 200+ MB exports | Acceptable | One full streaming pass per file (~3.5 min each, measured 2026-07-03); runs in the backup thread after the file is saved, nothing blocks on it |
 
 ---
 

@@ -4,8 +4,9 @@ Handles file system operations
 """
 
 import os
+import re
 import logging
-from datetime import datetime
+from datetime import datetime, date
 
 # Import config
 from config import config
@@ -138,6 +139,101 @@ class FileManager:
         except Exception as e:
             logging.error(f"❌ Backup failed: {e}")
             return None
+
+    # ------------------------------------------------------------------
+    # Retention
+    # ------------------------------------------------------------------
+
+    def cleanup_old_backups(self):
+        """Apply the tiered retention policy to the download directory.
+
+        A file's age is its {date} token, not filesystem mtime. Tiers:
+          <= RETENTION_DAILY_DAYS    keep every backup
+          <= RETENTION_WEEKLY_DAYS   keep the earliest backup date of each ISO
+                                     week (Monday when present — earliest also
+                                     covers weeks whose Monday backup is missing)
+          <= RETENTION_MONTHLY_DAYS  keep the earliest backup date of each month
+          older                      delete
+
+        Only files matching BACKUP_FILENAME_TEMPLATE (canonical or the
+        "_HHMMSS" fallback variant) are considered; anything else in the
+        directory is left untouched. Never raises — a cleanup problem must
+        not fail the backup that triggered it.
+        """
+        try:
+            deleted_count, freed_bytes = self._apply_retention()
+            if deleted_count:
+                logging.info(f"🧹 Retention: deleted {deleted_count} old backup file(s), "
+                             f"freed {freed_bytes / (1024 ** 3):.1f} GB")
+        except Exception as e:
+            logging.error(f"❌ Retention cleanup failed: {e}")
+
+    @staticmethod
+    def _backup_file_regex():
+        """Regex matching canonical and fallback backup filenames, derived
+        from the single BACKUP_FILENAME_TEMPLATE source of truth."""
+        base, ext = os.path.splitext(config.BACKUP_FILENAME_TEMPLATE)
+        pattern = (re.escape(base).replace(re.escape('{date}'), r'(\d{4}-\d{2}-\d{2})')
+                   + r'(?:_\d{6})?' + re.escape(ext) + '$')
+        return re.compile('^' + pattern)
+
+    def _apply_retention(self):
+        """Delete backup files not covered by the retention tiers.
+        Returns (deleted_count, freed_bytes)."""
+        regex = self._backup_file_regex()
+        today = date.today()
+
+        # Group backup files by their date token (a date may have a
+        # canonical file plus timestamped fallback saves — kept or deleted
+        # together)
+        files_by_date = {}
+        for name in os.listdir(self.download_dir):
+            path = os.path.join(self.download_dir, name)
+            if not os.path.isfile(path):
+                continue
+            match = regex.match(name)
+            if not match:
+                continue
+            try:
+                file_date = datetime.strptime(match.group(1), "%Y-%m-%d").date()
+            except ValueError:
+                continue
+            files_by_date.setdefault(file_date, []).append(path)
+
+        # Decide which DATES survive; a kept date keeps all its files
+        keep_dates = set()
+        earliest_in_period = {}
+        for file_date in files_by_date:
+            age = (today - file_date).days
+            if age <= config.RETENTION_DAILY_DAYS:
+                keep_dates.add(file_date)
+                continue
+            if age <= config.RETENTION_WEEKLY_DAYS:
+                iso = file_date.isocalendar()
+                period = ('week', iso[0], iso[1])
+            elif age <= config.RETENTION_MONTHLY_DAYS:
+                period = ('month', file_date.year, file_date.month)
+            else:
+                continue  # beyond all tiers — never kept
+            if period not in earliest_in_period or file_date < earliest_in_period[period]:
+                earliest_in_period[period] = file_date
+        keep_dates.update(earliest_in_period.values())
+
+        deleted_count = 0
+        freed_bytes = 0
+        for file_date, paths in sorted(files_by_date.items()):
+            if file_date in keep_dates:
+                continue
+            for path in paths:
+                try:
+                    size = os.path.getsize(path)
+                    os.remove(path)
+                    deleted_count += 1
+                    freed_bytes += size
+                    logging.info(f"🗑️ Retention: deleted {os.path.basename(path)}")
+                except OSError as e:
+                    logging.warning(f"⚠️ Retention: could not delete {path}: {e}")
+        return deleted_count, freed_bytes
 
 # Global singleton
 file_manager = FileManager()

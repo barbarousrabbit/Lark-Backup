@@ -6,11 +6,12 @@ Used to compare backup data from different dates and detect data changes
 import os
 import glob
 import json
+import time
 import logging
 from collections import Counter
 from datetime import datetime, timedelta
 import openpyxl
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from config import config
 
@@ -79,88 +80,68 @@ class DataComparator:
         file_path = self.get_backup_file_path(date_str)
         return os.path.exists(file_path)
 
-    def count_data_rows(self, file_path: str) -> Dict[str, int]:
+    @staticmethod
+    def _row_key(row) -> Optional[str]:
         """
-        Count the number of data rows in each worksheet of an Excel file
+        Serialize one worksheet row into its comparison key.
+
+        Returns None for rows without content so callers can skip them.
+        Blank rows occur in the MIDDLE of real Lark exports — a blank row
+        must never be treated as end-of-data.
+        """
+        if not any(cell.value is not None for cell in row):
+            return None
+        values = [str(cell.value).strip() if cell.value is not None else '' for cell in row]
+        while values and values[-1] == '':
+            values.pop()
+        return '|'.join(values) if values else None
+
+    def get_all_sheet_counters(self, file_path: str) -> Dict[str, Counter]:
+        """
+        Build a data-row Counter for EVERY worksheet in one streaming pass.
+
+        Two hard requirements learned from production files:
+        - Lark's exporter writes a bogus `<dimension ref="A1"/>` on every
+          sheet. openpyxl read-only mode trusts it, so iter_rows() yields
+          ZERO rows unless reset_dimensions() is called first.
+        - Sheets contain interior blank rows, so every row is scanned — an
+          early break on the first blank row silently under-counts.
+
+        Raises on an unreadable file. Callers must treat that as
+        "comparison impossible" — degrading to an empty Counter would count
+        every row of the other file as deleted and fire a false data-loss
+        alert.
 
         Args:
             file_path: Path to the Excel file
 
         Returns:
-            Mapping from worksheet name to row count
+            Mapping from worksheet name to its data-row Counter
         """
         workbook = None
         try:
             workbook = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
-            sheet_counts = {}
-
+            counters: Dict[str, Counter] = {}
             for sheet_name in workbook.sheetnames:
                 sheet = workbook[sheet_name]
-                row_count = 0
+                sheet.reset_dimensions()
+                counter: Counter = Counter()
                 for row in sheet.iter_rows(min_row=2):
-                    if any(cell.value is not None for cell in row):
-                        row_count += 1
-                    else:
-                        break
-
-                sheet_counts[sheet_name] = row_count
-                logging.debug(f"Sheet '{sheet_name}': {row_count} rows")
-
-            return sheet_counts
-
-        except Exception as e:
-            logging.error(f"Error counting rows in {file_path}: {e}")
-            return {}
-        finally:
-            if workbook:
-                workbook.close()
-
-    def get_data_rows_counter(self, file_path: str, sheet_name: str) -> Counter:
-        """
-        Get all data rows in the specified worksheet (as a string Counter)
-        Used for precise comparison of data changes, correctly handles duplicate rows
-
-        Args:
-            file_path: Path to the Excel file
-            sheet_name: Worksheet name
-
-        Returns:
-            String Counter of data rows
-        """
-        workbook = None
-        try:
-            workbook = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
-            if sheet_name not in workbook.sheetnames:
-                return Counter()
-
-            sheet = workbook[sheet_name]
-            data_rows: Counter = Counter()
-
-            for row in sheet.iter_rows(min_row=2):
-                if any(cell.value is not None for cell in row):
-                    row_data = []
-                    for cell in row:
-                        row_data.append(str(cell.value).strip() if cell.value is not None else '')
-                    while row_data and row_data[-1] == '':
-                        row_data.pop()
-                    if row_data:
-                        data_rows['|'.join(row_data)] += 1
-                else:
-                    break
-
-            return data_rows
-
-        except Exception as e:
-            logging.error(f"Error reading data rows from {file_path}, sheet '{sheet_name}': {e}")
-            return Counter()
+                    key = self._row_key(row)
+                    if key is not None:
+                        counter[key] += 1
+                counters[sheet_name] = counter
+            return counters
         finally:
             if workbook:
                 workbook.close()
 
     def compare_two_dates(self, date1_str: str, date2_str: str) -> Tuple[Dict[str, int], List[str]]:
         """
-        Compare backup data from two dates
-        Focuses on detecting data loss (rather than net change)
+        Compare backup data from two dates.
+        Data-loss WARNINGS fire on net row-count decline (the sheet shrank);
+        the differences dict still carries Counter-level deleted/added detail
+        for the report.
 
         Args:
             date1_str: First date (earlier)
@@ -187,23 +168,31 @@ class DataComparator:
         file1_path = self.get_backup_file_path(date1_str)
         file2_path = self.get_backup_file_path(date2_str)
 
-        # Count basic row numbers
-        counts1 = self.count_data_rows(file1_path)
-        counts2 = self.count_data_rows(file2_path)
+        # One streaming pass per file builds every sheet's Counter
+        # (measured ~3.5 min per 200+ MB export)
+        start_time = time.time()
+        try:
+            counters1 = self.get_all_sheet_counters(file1_path)
+            counters2 = self.get_all_sheet_counters(file2_path)
+        except Exception as e:
+            # An unreadable file aborts the comparison with a warning —
+            # never degrade to "empty file", which would report every row
+            # of the other file as deleted and fire a false data-loss alert.
+            logging.error(f"❌ Comparison aborted — cannot read backup file: {e}")
+            warnings.append(f"Comparison could not run: {e}")
+            return {}, warnings
 
         # Compare data content for each worksheet
-        all_sheets = set(counts1.keys()) | set(counts2.keys())
+        all_sheets = set(counters1.keys()) | set(counters2.keys())
 
         for sheet_name in all_sheets:
-            count1 = counts1.get(sheet_name, 0)
-            count2 = counts2.get(sheet_name, 0)
+            data1 = counters1.get(sheet_name, Counter())
+            data2 = counters2.get(sheet_name, Counter())
+            count1 = sum(data1.values())
+            count2 = sum(data2.values())
 
             if count1 == 0 and count2 == 0:
                 continue  # Neither file has data for this sheet
-
-            # Get actual data row Counters
-            data1 = self.get_data_rows_counter(file1_path, sheet_name)
-            data2 = self.get_data_rows_counter(file2_path, sheet_name)
 
             # Calculate data changes (Counter subtraction discards zeros/negatives, keeping only surplus)
             deleted_counter = data1 - data2   # rows in data1 not fully covered by data2
@@ -225,12 +214,18 @@ class DataComparator:
 
                 logging.info(f"📊 Sheet '{sheet_name}': {count1} → {count2} (deleted: {deleted_count}, added: {added_count})")
 
-                # Focus on data loss: generate a warning if deleted rows exceed the threshold
-                if deleted_count > config.ALERT_DELETED_ROW_THRESHOLD:
-                    warning_msg = f"⚠️ Sheet '{sheet_name}' lost {deleted_count} records"
+                # Data-loss warning on NET decline only. Counter "deleted"
+                # also counts rows that merely CHANGED (volatile computed
+                # columns rewrite thousands of rows every day), so alerting
+                # on it would cry wolf daily; a real mass deletion shows up
+                # as the sheet shrinking.
+                net_loss = count1 - count2
+                if net_loss > config.ALERT_DELETED_ROW_THRESHOLD:
+                    warning_msg = f"⚠️ Sheet '{sheet_name}' shrank by {net_loss} rows ({count1} → {count2})"
                     warnings.append(warning_msg)
                     logging.warning(warning_msg)
 
+        logging.info(f"🔍 Compared {len(all_sheets)} sheets in {time.time() - start_time:.0f}s")
         return differences, warnings
 
     def compare_with_previous_date(self, current_date_str: str) -> Tuple[Dict[str, int], List[str]]:

@@ -18,8 +18,10 @@ class AlertManager:
     """
     Manages data loss alert notifications with per-day deduplication.
 
-    Only fires when at least one sheet has lost more than
-    config.ALERT_DELETED_ROW_THRESHOLD rows (consistent with data_comparator).
+    Only fires when at least one sheet NET-shrank by more than
+    config.ALERT_DELETED_ROW_THRESHOLD rows (consistent with
+    data_comparator's warning rule — Counter-level "deleted" alone is noisy
+    because volatile computed columns rewrite rows daily).
     At most one alert is shown per date per process lifetime.
     """
 
@@ -48,7 +50,7 @@ class AlertManager:
 
         significant_changes = {
             sheet: info for sheet, info in comparison_result.items()
-            if info.get('deleted_count', 0) > config.ALERT_DELETED_ROW_THRESHOLD
+            if (info.get('before', 0) - info.get('after', 0)) > config.ALERT_DELETED_ROW_THRESHOLD
         }
 
         if not significant_changes:
@@ -56,14 +58,14 @@ class AlertManager:
 
         self.last_alert_date = date_str
 
-        total_deleted = sum(v.get('deleted_count', 0) for v in significant_changes.values())
+        total_loss = sum(v.get('before', 0) - v.get('after', 0) for v in significant_changes.values())
         n_sheets = len(significant_changes)
         sheet_label = "sheet" if n_sheets == 1 else "sheets"
 
         logging.warning(f"🚨 Data loss alert for {date_str}: {warnings}")
         show_notification(
             "Data Loss Alert",
-            f"{total_deleted} rows deleted across {n_sheets} {sheet_label}",
+            f"{total_loss} rows lost across {n_sheets} {sheet_label}",
             "error",
         )
 

@@ -69,6 +69,12 @@ EXPORT_STATUS_CHECK_INTERVAL = 15  # 15-second check interval
 SCHEDULE_CHECK_INTERVAL = 30  # Interval for scheduler tick checks (seconds)
 ERROR_RETRY_INTERVAL = 60  # Retry interval after an error occurs (seconds)
 
+# Backup retention (tiered; applied after each successful backup).
+# A file's age is its {date} token, not filesystem mtime.
+RETENTION_DAILY_DAYS = 30     # newer than this: keep every daily backup
+RETENTION_WEEKLY_DAYS = 180   # 31-180 days: keep the earliest backup of each ISO week (Monday when present)
+RETENTION_MONTHLY_DAYS = 730  # 181-730 days: keep the earliest backup of each month; older backups are deleted
+
 # Daily retry configuration
 MAX_DAILY_ATTEMPTS = 5  # Maximum number of attempts per day
 # Save the retry count file in the program directory
